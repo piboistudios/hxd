@@ -1,0 +1,12 @@
+-lib tink_runloop
+-lib tink_unittest
+-lib tink_streams
+-cp src
+-D analyzer-optimize
+-main Main
+--each
+-python test.py
+--next
+-neko test.n
+--next
+--interp
