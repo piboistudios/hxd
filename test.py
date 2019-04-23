@@ -20,12 +20,15 @@ import random as python_lib_Random
 import re as python_lib_Re
 import socket as python_lib_Socket
 import ssl as python_lib_Ssl
+import threading as python_lib_Threading
 import time as python_lib_Time
 import timeit as python_lib_Timeit
 import traceback as python_lib_Traceback
 from io import StringIO as python_lib_io_StringIO
 from socket import socket as python_lib_socket_Socket
 from ssl import SSLContext as python_lib_ssl_SSLContext
+from threading import RLock as python_lib_threading_RLock
+from threading import Thread as python_lib_threading_Thread
 import urllib.parse as python_lib_urllib_Parse
 
 
@@ -197,7 +200,7 @@ _hx_classes["python.HaxeIterator"] = python_HaxeIterator
 class Sys:
     _hx_class_name = "Sys"
     __slots__ = ()
-    _hx_statics = ["environ", "exit", "getEnv", "systemName"]
+    _hx_statics = ["environ", "exit", "getEnv", "sleep", "systemName"]
 
     @staticmethod
     def exit(code):
@@ -206,6 +209,10 @@ class Sys:
     @staticmethod
     def getEnv(s):
         return Sys.environ.h.get(s,None)
+
+    @staticmethod
+    def sleep(seconds):
+        python_lib_Time.sleep(seconds)
 
     @staticmethod
     def systemName():
@@ -718,7 +725,7 @@ class haxe_io_Input:
     _hx_class_name = "haxe.io.Input"
     __slots__ = ("bigEndian",)
     _hx_fields = ["bigEndian"]
-    _hx_methods = ["readByte", "readBytes", "set_bigEndian", "read", "readInt16", "readUInt16"]
+    _hx_methods = ["readByte", "readBytes", "set_bigEndian", "read", "readInt16"]
 
     def readByte(self):
         raise _HxException("Not implemented")
@@ -763,14 +770,6 @@ class haxe_io_Input:
         if (((n & 32768)) != 0):
             return (n - 65536)
         return n
-
-    def readUInt16(self):
-        ch1 = self.readByte()
-        ch2 = self.readByte()
-        if self.bigEndian:
-            return (ch2 | ((ch1 << 8)))
-        else:
-            return (ch1 | ((ch2 << 8)))
 
     @staticmethod
     def _hx_empty_init(_hx_o):
@@ -829,7 +828,7 @@ _hx_classes["python.io.NativeInput"] = python_io_NativeInput
 class python_io_IInput:
     _hx_class_name = "python.io.IInput"
     __slots__ = ()
-    _hx_methods = ["set_bigEndian", "readByte", "readBytes", "read", "readInt16", "readUInt16"]
+    _hx_methods = ["set_bigEndian", "readByte", "readBytes", "read", "readInt16"]
 python_io_IInput._hx_class = python_io_IInput
 _hx_classes["python.io.IInput"] = python_io_IInput
 
@@ -895,7 +894,7 @@ class sys_io_FileInput(haxe_io_Input):
     _hx_class_name = "sys.io.FileInput"
     __slots__ = ("impl",)
     _hx_fields = ["impl"]
-    _hx_methods = ["set_bigEndian", "seek", "readByte", "readBytes", "read", "readInt16", "readUInt16"]
+    _hx_methods = ["set_bigEndian", "seek", "readByte", "readBytes", "read", "readInt16"]
     _hx_statics = []
     _hx_interfaces = []
     _hx_super = haxe_io_Input
@@ -922,9 +921,6 @@ class sys_io_FileInput(haxe_io_Input):
 
     def readInt16(self):
         return self.impl.readInt16()
-
-    def readUInt16(self):
-        return self.impl.readUInt16()
 
     @staticmethod
     def _hx_empty_init(_hx_o):
@@ -1917,69 +1913,73 @@ class TestStorage:
     def test_create(self,count,asserts):
         hxd_sys_Engine.start(_hx_AnonObject({'path': "test"}))
         book = hxd_storage_Book.open("test")
-        def _hx_local_0(s):
-            return haxe_zip_Compress.run(s,1)
-        def _hx_local_1(src):
-            return haxe_zip_Uncompress.run(src,None)
-        book.addStoragePlan(_hx_local_0,_hx_local_1)
-        _g = []
-        _g1 = 0
-        _g2 = count
-        while (_g1 < _g2):
-            _g1 = (_g1 + 1)
-            x = hxd_storage_Record("DATA HERE")
-            _g.append(x)
-        expecting = 0
-        log = []
-        hits = 0
-        sum = 0
-        def _hx_local_10(result):
-            nonlocal sum
-            nonlocal hits
-            nonlocal expecting
-            handler = result.index
-            if (handler == 0):
-                records = result.params[1]
-                hits = (hits + 1)
-                x1 = _hx_AnonObject({'page': result.params[0].number, 'count': len(records)})
-                log.append(x1)
-                sum = (sum + len(records))
-            elif (handler == 1):
-                expecting = result.params[0]
-            else:
-                pass
-            return tink_core__Future_SyncFuture(tink_core__Lazy_LazyConst(tink_streams_Handled.Resume))
-        def _hx_local_7(result1):
-            def _hx_local_6():
-                def _hx_local_5():
+        def _hx_local_10(initial):
+            _g = []
+            _g1 = 0
+            _g2 = count
+            while (_g1 < _g2):
+                _g1 = (_g1 + 1)
+                x = hxd_storage_Record("DATA HERE")
+                _g.append(x)
+            expecting = 0
+            log = []
+            hits = 0
+            sum = 0
+            def _hx_local_9():
+                def _hx_local_8(result):
+                    nonlocal sum
+                    nonlocal expecting
+                    nonlocal hits
+                    handler = result.index
+                    if (handler == 0):
+                        records = result.params[1]
+                        hits = (hits + 1)
+                        x1 = _hx_AnonObject({'page': result.params[0].number, 'count': len(records)})
+                        log.append(x1)
+                        sum = (sum + len(records))
+                    elif (handler == 1):
+                        expecting = result.params[0]
+                    else:
+                        pass
+                    return tink_core__Future_SyncFuture(tink_core__Lazy_LazyConst(tink_streams_Handled.Resume))
+                def _hx_local_5(result1):
                     def _hx_local_4():
-                        def _hx_local_3(total):
-                            lh = book.calculatePadding().percentage
-                            data = tink_streams_Yield.Data(tink_testrunner_Assertion(tink_testrunner__Assertion_AssertionResult_Impl_.ofBool((lh < 0.3)),((((((("padding.percentage < 0.3" + " (") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(lh))) + " ") + "<") + " ") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(0.3))) + ")"),_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 63, 'className': "TestStorage", 'methodName': "test_create"})))
-                            tink_core__Callback_CallbackList_Impl_.invoke(asserts.trigger.handlers,data)
-                            lh1 = result1
-                            rh = tink_streams_Conclusion.Depleted
-                            data1 = tink_streams_Yield.Data(tink_testrunner_Assertion(tink_testrunner__Assertion_AssertionResult_Impl_.ofBool((lh1 == rh)),((((((("result == Depleted" + " (") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(lh1))) + " ") + "==") + " ") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(rh))) + ")"),_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 64, 'className': "TestStorage", 'methodName': "test_create"})))
-                            tink_core__Callback_CallbackList_Impl_.invoke(asserts.trigger.handlers,data1)
-                            rh1 = count
-                            data2 = tink_streams_Yield.Data(tink_testrunner_Assertion(tink_testrunner__Assertion_AssertionResult_Impl_.ofBool((total == rh1)),((((((("total == count" + " (") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(total))) + " ") + "==") + " ") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(rh1))) + ")"),_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 65, 'className': "TestStorage", 'methodName': "test_create"})))
-                            tink_core__Callback_CallbackList_Impl_.invoke(asserts.trigger.handlers,data2)
-                            lh2 = sum
-                            data3 = tink_streams_Yield.Data(tink_testrunner_Assertion(tink_testrunner__Assertion_AssertionResult_Impl_.ofBool((lh2 == total)),((((((("sum == total" + " (") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(lh2))) + " ") + "==") + " ") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(total))) + ")"),_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 66, 'className': "TestStorage", 'methodName': "test_create"})))
-                            tink_core__Callback_CallbackList_Impl_.invoke(asserts.trigger.handlers,data3)
-                            tink_core__Callback_CallbackList_Impl_.invoke(asserts.trigger.handlers,tink_streams_Yield.End)
-                            return asserts
-                        return book.count().handle(_hx_local_3)
+                        def _hx_local_3():
+                            haxe_Log.trace(log,_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 86, 'className': "TestStorage", 'methodName': "test_create"}))
+                            haxe_Log.trace("DONE COMMITTING.",_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 87, 'className': "TestStorage", 'methodName': "test_create"}))
+                            def _hx_local_2():
+                                def _hx_local_1(total):
+                                    padding = book.calculatePadding()
+                                    haxe_Log.trace(((((((("total: " + Std.string(total)) + ", sum: ") + Std.string(sum)) + ", initial: ") + Std.string(initial)) + ", hits: ") + Std.string(hits)),_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 90, 'className': "TestStorage", 'methodName': "test_create"}))
+                                    lh = padding.percentage
+                                    data = tink_streams_Yield.Data(tink_testrunner_Assertion(tink_testrunner__Assertion_AssertionResult_Impl_.ofBool((lh < 0.3)),((((((("padding.percentage < 0.3" + " (") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(lh))) + " ") + "<") + " ") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(0.3))) + ")"),_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 91, 'className': "TestStorage", 'methodName': "test_create"})))
+                                    tink_core__Callback_CallbackList_Impl_.invoke(asserts.trigger.handlers,data)
+                                    lh1 = result1
+                                    rh = tink_streams_Conclusion.Depleted
+                                    data1 = tink_streams_Yield.Data(tink_testrunner_Assertion(tink_testrunner__Assertion_AssertionResult_Impl_.ofBool((lh1 == rh)),((((((("result == Depleted" + " (") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(lh1))) + " ") + "==") + " ") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(rh))) + ")"),_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 92, 'className': "TestStorage", 'methodName': "test_create"})))
+                                    tink_core__Callback_CallbackList_Impl_.invoke(asserts.trigger.handlers,data1)
+                                    lh2 = (count + initial)
+                                    data2 = tink_streams_Yield.Data(tink_testrunner_Assertion(tink_testrunner__Assertion_AssertionResult_Impl_.ofBool((lh2 == total)),((((((("count + initial == total" + " (") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(lh2))) + " ") + "==") + " ") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(total))) + ")"),_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 93, 'className': "TestStorage", 'methodName': "test_create"})))
+                                    tink_core__Callback_CallbackList_Impl_.invoke(asserts.trigger.handlers,data2)
+                                    lh3 = (total - sum)
+                                    rh1 = initial
+                                    data3 = tink_streams_Yield.Data(tink_testrunner_Assertion(tink_testrunner__Assertion_AssertionResult_Impl_.ofBool((lh3 == rh1)),((((((("total - sum == initial" + " (") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(lh3))) + " ") + "==") + " ") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(rh1))) + ")"),_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 94, 'className': "TestStorage", 'methodName': "test_create"})))
+                                    tink_core__Callback_CallbackList_Impl_.invoke(asserts.trigger.handlers,data3)
+                                    tink_core__Callback_CallbackList_Impl_.invoke(asserts.trigger.handlers,tink_streams_Yield.End)
+                                    return asserts
+                                return book.count().handle(_hx_local_1)
+                            return _hx_local_2()
+                        return book.commit().handle(tink_core__Callback_Callback_Impl_.fromNiladic(_hx_local_3))
                     return _hx_local_4()
-                return book.commit().handle(tink_core__Callback_Callback_Impl_.fromNiladic(_hx_local_5))
-            return _hx_local_6()
-        book.create(_g).forEach(tink_streams__Stream_Handler_Impl_.ofSafe(_hx_local_10)).handle(_hx_local_7)
+                return book.create(_g).forEach(tink_streams__Stream_Handler_Impl_.ofSafe(_hx_local_8)).handle(_hx_local_5)
+            return _hx_local_9()
+        book.count().handle(_hx_local_10)
         return asserts
 
     def request(self,count):
         done = tink_core_FutureTrigger()
         http = sys_Http(("https://randomuser.me/api?results=" + Std.string(count)))
-        haxe_Log.trace("Getting random users",_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 78, 'className': "TestStorage", 'methodName': "request"}))
+        haxe_Log.trace("Getting random users",_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 107, 'className': "TestStorage", 'methodName': "request"}))
         def _hx_local_0(d):
             tmp = tink_core_Outcome.Success(python_lib_Json.loads(d,**python__KwArgs_KwArgs_Impl_.fromT(_hx_AnonObject({'object_hook': python_Lib.dictToAnon}))))
             done.trigger(tmp)
@@ -2016,8 +2016,8 @@ class TestStorage:
                     hits = 0
                     def _hx_local_10():
                         def _hx_local_9(result):
-                            nonlocal expecting
                             nonlocal hits
+                            nonlocal expecting
                             handler = result.index
                             if (handler == 0):
                                 hits = (hits + 1)
@@ -2035,16 +2035,16 @@ class TestStorage:
                                         def _hx_local_3(total):
                                             padding = book.calculatePadding()
                                             lh = padding.percentage
-                                            data = tink_streams_Yield.Data(tink_testrunner_Assertion(tink_testrunner__Assertion_AssertionResult_Impl_.ofBool((lh < 0.3)),((((((("padding.percentage < 0.3" + " (") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(lh))) + " ") + "<") + " ") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(0.3))) + ")"),_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 137, 'className': "TestStorage", 'methodName': "test_http"})))
+                                            data = tink_streams_Yield.Data(tink_testrunner_Assertion(tink_testrunner__Assertion_AssertionResult_Impl_.ofBool((lh < 0.3)),((((((("padding.percentage < 0.3" + " (") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(lh))) + " ") + "<") + " ") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(0.3))) + ")"),_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 166, 'className': "TestStorage", 'methodName': "test_http"})))
                                             tink_core__Callback_CallbackList_Impl_.invoke(asserts.trigger.handlers,data)
                                             lh1 = result1
                                             rh = tink_streams_Conclusion.Depleted
-                                            data1 = tink_streams_Yield.Data(tink_testrunner_Assertion(tink_testrunner__Assertion_AssertionResult_Impl_.ofBool((lh1 == rh)),((((((("result == Depleted" + " (") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(lh1))) + " ") + "==") + " ") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(rh))) + ")"),_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 138, 'className': "TestStorage", 'methodName': "test_http"})))
+                                            data1 = tink_streams_Yield.Data(tink_testrunner_Assertion(tink_testrunner__Assertion_AssertionResult_Impl_.ofBool((lh1 == rh)),((((((("result == Depleted" + " (") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(lh1))) + " ") + "==") + " ") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(rh))) + ")"),_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 167, 'className': "TestStorage", 'methodName': "test_http"})))
                                             tink_core__Callback_CallbackList_Impl_.invoke(asserts.trigger.handlers,data1)
                                             lh2 = (initialCount + ((count * apiHits)))
-                                            data2 = tink_streams_Yield.Data(tink_testrunner_Assertion(tink_testrunner__Assertion_AssertionResult_Impl_.ofBool((lh2 == total)),((((((("initialCount + (count * apiHits) == total" + " (") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(lh2))) + " ") + "==") + " ") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(total))) + ")"),_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 139, 'className': "TestStorage", 'methodName': "test_http"})))
+                                            data2 = tink_streams_Yield.Data(tink_testrunner_Assertion(tink_testrunner__Assertion_AssertionResult_Impl_.ofBool((lh2 == total)),((((((("initialCount + (count * apiHits) == total" + " (") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(lh2))) + " ") + "==") + " ") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(total))) + ")"),_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 168, 'className': "TestStorage", 'methodName': "test_http"})))
                                             tink_core__Callback_CallbackList_Impl_.invoke(asserts.trigger.handlers,data2)
-                                            haxe_Log.trace(padding,_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 140, 'className': "TestStorage", 'methodName': "test_http"}))
+                                            haxe_Log.trace(padding,_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 169, 'className': "TestStorage", 'methodName': "test_http"}))
                                             tink_core__Callback_CallbackList_Impl_.invoke(asserts.trigger.handlers,tink_streams_Yield.End)
                                             return asserts
                                         return book.count().handle(_hx_local_3)
@@ -2088,7 +2088,7 @@ class TestStream:
                 i = (i + 1)
                 return i
             lh = _hx_local_1()
-            data = tink_streams_Yield.Data(tink_testrunner_Assertion(tink_testrunner__Assertion_AssertionResult_Impl_.ofBool((lh == v)),((((((("++i == v" + " (") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(lh))) + " ") + "==") + " ") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(v))) + ")"),_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 172, 'className': "TestStream", 'methodName': "test"})))
+            data = tink_streams_Yield.Data(tink_testrunner_Assertion(tink_testrunner__Assertion_AssertionResult_Impl_.ofBool((lh == v)),((((((("++i == v" + " (") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(lh))) + " ") + "==") + " ") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(v))) + ")"),_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 201, 'className': "TestStream", 'methodName': "test"})))
             tink_core__Callback_CallbackList_Impl_.invoke(asserts.trigger.handlers,data)
             sum = (sum + v)
             return tink_core__Future_SyncFuture(tink_core__Lazy_LazyConst(tink_streams_Handled.Resume))
@@ -2100,32 +2100,32 @@ class TestStream:
         tink_core__Callback_CallbackList_Impl_.invoke(a.handlers,tink_streams_Yield.Data(7))
         def _hx_local_4(x):
             lh1 = tink_streams_Conclusion.Depleted
-            data1 = tink_streams_Yield.Data(tink_testrunner_Assertion(tink_testrunner__Assertion_AssertionResult_Impl_.ofBool((lh1 == x)),((((((("Depleted == x" + " (") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(lh1))) + " ") + "==") + " ") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(x))) + ")"),_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 184, 'className': "TestStream", 'methodName': "test"})))
+            data1 = tink_streams_Yield.Data(tink_testrunner_Assertion(tink_testrunner__Assertion_AssertionResult_Impl_.ofBool((lh1 == x)),((((((("Depleted == x" + " (") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(lh1))) + " ") + "==") + " ") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(x))) + ")"),_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 213, 'className': "TestStream", 'methodName': "test"})))
             tink_core__Callback_CallbackList_Impl_.invoke(asserts.trigger.handlers,data1)
             rh = sum
-            data2 = tink_streams_Yield.Data(tink_testrunner_Assertion(tink_testrunner__Assertion_AssertionResult_Impl_.ofBool((15 == rh)),((((((("15 == sum" + " (") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(15))) + " ") + "==") + " ") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(rh))) + ")"),_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 185, 'className': "TestStream", 'methodName': "test"})))
+            data2 = tink_streams_Yield.Data(tink_testrunner_Assertion(tink_testrunner__Assertion_AssertionResult_Impl_.ofBool((15 == rh)),((((((("15 == sum" + " (") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(15))) + " ") + "==") + " ") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(rh))) + ")"),_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 214, 'className': "TestStream", 'methodName': "test"})))
             tink_core__Callback_CallbackList_Impl_.invoke(asserts.trigger.handlers,data2)
             return
         result.handle(_hx_local_4)
         def _hx_local_6(v1):
             nonlocal sum
             sum = (sum + v1)
-            haxe_Log.trace(((("sum: " + Std.string(sum)) + ", ") + Std.string(v1)),_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 189, 'className': "TestStream", 'methodName': "test"}))
+            haxe_Log.trace(((("sum: " + Std.string(sum)) + ", ") + Std.string(v1)),_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 218, 'className': "TestStream", 'methodName': "test"}))
             return tink_core__Future_SyncFuture(tink_core__Lazy_LazyConst(tink_streams_Handled.Resume))
         nextResult = stream.forEach(tink_streams__Stream_Handler_Impl_.ofSafe(_hx_local_6))
         tink_core__Callback_CallbackList_Impl_.invoke(a.handlers,tink_streams_Yield.End)
         def _hx_local_7(x1):
             nonlocal done
             lh2 = tink_streams_Conclusion.Depleted
-            data3 = tink_streams_Yield.Data(tink_testrunner_Assertion(tink_testrunner__Assertion_AssertionResult_Impl_.ofBool((lh2 == x1)),((((((("Depleted == x" + " (") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(lh2))) + " ") + "==") + " ") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(x1))) + ")"),_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 194, 'className': "TestStream", 'methodName': "test"})))
+            data3 = tink_streams_Yield.Data(tink_testrunner_Assertion(tink_testrunner__Assertion_AssertionResult_Impl_.ofBool((lh2 == x1)),((((((("Depleted == x" + " (") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(lh2))) + " ") + "==") + " ") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(x1))) + ")"),_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 223, 'className': "TestStream", 'methodName': "test"})))
             tink_core__Callback_CallbackList_Impl_.invoke(asserts.trigger.handlers,data3)
             rh1 = sum
-            data4 = tink_streams_Yield.Data(tink_testrunner_Assertion(tink_testrunner__Assertion_AssertionResult_Impl_.ofBool((30 == rh1)),((((((("30 == sum" + " (") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(30))) + " ") + "==") + " ") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(rh1))) + ")"),_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 195, 'className': "TestStream", 'methodName': "test"})))
+            data4 = tink_streams_Yield.Data(tink_testrunner_Assertion(tink_testrunner__Assertion_AssertionResult_Impl_.ofBool((30 == rh1)),((((((("30 == sum" + " (") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(30))) + " ") + "==") + " ") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(rh1))) + ")"),_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 224, 'className': "TestStream", 'methodName': "test"})))
             tink_core__Callback_CallbackList_Impl_.invoke(asserts.trigger.handlers,data4)
             done = True
             return done
         nextResult.handle(_hx_local_7)
-        data5 = tink_streams_Yield.Data(tink_testrunner_Assertion(tink_testrunner__Assertion_AssertionResult_Impl_.ofBool(done),"done",_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 198, 'className': "TestStream", 'methodName': "test"})))
+        data5 = tink_streams_Yield.Data(tink_testrunner_Assertion(tink_testrunner__Assertion_AssertionResult_Impl_.ofBool(done),"done",_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 227, 'className': "TestStream", 'methodName': "test"})))
         tink_core__Callback_CallbackList_Impl_.invoke(asserts.trigger.handlers,data5)
         tink_core__Callback_CallbackList_Impl_.invoke(asserts.trigger.handlers,tink_streams_Yield.End)
         return asserts
@@ -2139,7 +2139,7 @@ class TestStream:
         def _hx_local_0(handled):
             lh = (sum == 15)
             rh = (handled == tink_streams_Conclusion.Depleted)
-            data = tink_streams_Yield.Data(tink_testrunner_Assertion(tink_testrunner__Assertion_AssertionResult_Impl_.ofBool((lh and rh)),((((((("sum == 15 && handled == Depleted" + " (") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(lh))) + " ") + "&&") + " ") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(rh))) + ")"),_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 210, 'className': "TestStream", 'methodName': "test_pass_stream"})))
+            data = tink_streams_Yield.Data(tink_testrunner_Assertion(tink_testrunner__Assertion_AssertionResult_Impl_.ofBool((lh and rh)),((((((("sum == 15 && handled == Depleted" + " (") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(lh))) + " ") + "&&") + " ") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(rh))) + ")"),_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 239, 'className': "TestStream", 'methodName': "test_pass_stream"})))
             tink_core__Callback_CallbackList_Impl_.invoke(asserts.trigger.handlers,data)
             tink_core__Callback_CallbackList_Impl_.invoke(asserts.trigger.handlers,tink_streams_Yield.End)
             return asserts
@@ -2170,7 +2170,7 @@ class TestStream:
         def _hx_local_0(result):
             try:
                 if (result == -1):
-                    raise _HxException(tink_core_TypedError(500,"Can't perform operation on -1",_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 241, 'className': "TestStream", 'methodName': "test_unclog"})))
+                    raise _HxException(tink_core_TypedError(500,"Can't perform operation on -1",_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 270, 'className': "TestStream", 'methodName': "test_unclog"})))
                 aggregate.append(result)
                 return tink_core__Future_SyncFuture(tink_core__Lazy_LazyConst(tink_streams_Handled.Resume))
             except Exception as _hx_e:
@@ -2188,17 +2188,17 @@ class TestStream:
         def _hx_local_4(conclusion):
             tmp = conclusion.index
             if (tmp == 1):
-                haxe_Log.trace((("Threw " + Std.string(conclusion.params[0])) + ", resuming"),_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 256, 'className': "TestStream", 'methodName': "test_unclog"}))
+                haxe_Log.trace((("Threw " + Std.string(conclusion.params[0])) + ", resuming"),_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 285, 'className': "TestStream", 'methodName': "test_unclog"}))
                 def _hx_local_3(conclusion1):
                     if (conclusion1.index == 3):
-                        haxe_Log.trace("Done",_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 260, 'className': "TestStream", 'methodName': "test_unclog"}))
+                        haxe_Log.trace("Done",_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 289, 'className': "TestStream", 'methodName': "test_unclog"}))
                         expected = [1, 2, -1, 3, 4]
                         _g = 0
                         while (_g < len(aggregate)):
                             i = (aggregate[_g] if _g >= 0 and _g < len(aggregate) else None)
                             _g = (_g + 1)
                             rh = python_internal_ArrayImpl._get(expected, python_internal_ArrayImpl.indexOf(aggregate,i,None))
-                            data = tink_streams_Yield.Data(tink_testrunner_Assertion(tink_testrunner__Assertion_AssertionResult_Impl_.ofBool((i == rh)),((((((("i == expected[aggregate.indexOf(i)]" + " (") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(i))) + " ") + "==") + " ") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(rh))) + ")"),_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 263, 'className': "TestStream", 'methodName': "test_unclog"})))
+                            data = tink_streams_Yield.Data(tink_testrunner_Assertion(tink_testrunner__Assertion_AssertionResult_Impl_.ofBool((i == rh)),((((((("i == expected[aggregate.indexOf(i)]" + " (") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(i))) + " ") + "==") + " ") + HxOverrides.stringOrNull(tink_unit_Assert.stringify(rh))) + ")"),_hx_AnonObject({'fileName': "src/Main.hx", 'lineNumber': 292, 'className': "TestStream", 'methodName': "test_unclog"})))
                             tink_core__Callback_CallbackList_Impl_.invoke(asserts.trigger.handlers,data)
                         tink_core__Callback_CallbackList_Impl_.invoke(asserts.trigger.handlers,tink_streams_Yield.End)
                     return tink_core_Noise.Noise
@@ -3753,53 +3753,6 @@ haxe_Unserializer._hx_class = haxe_Unserializer
 _hx_classes["haxe.Unserializer"] = haxe_Unserializer
 
 
-class haxe_crypto_Adler32:
-    _hx_class_name = "haxe.crypto.Adler32"
-    __slots__ = ("a1", "a2")
-    _hx_fields = ["a1", "a2"]
-    _hx_methods = ["update", "equals"]
-    _hx_statics = ["read"]
-
-    def __init__(self):
-        self.a1 = 1
-        self.a2 = 0
-
-    def update(self,b,pos,_hx_len):
-        a1 = self.a1
-        a2 = self.a2
-        _g = pos
-        _g1 = (pos + _hx_len)
-        while (_g < _g1):
-            p = _g
-            _g = (_g + 1)
-            a1 = HxOverrides.mod(((a1 + b.b[p])), 65521)
-            a2 = HxOverrides.mod(((a2 + a1)), 65521)
-        self.a1 = a1
-        self.a2 = a2
-
-    def equals(self,a):
-        if (a.a1 == self.a1):
-            return (a.a2 == self.a2)
-        else:
-            return False
-
-    @staticmethod
-    def read(i):
-        a = haxe_crypto_Adler32()
-        a2a = i.readByte()
-        a2b = i.readByte()
-        a.a1 = ((i.readByte() << 8) | i.readByte())
-        a.a2 = ((a2a << 8) | a2b)
-        return a
-
-    @staticmethod
-    def _hx_empty_init(_hx_o):
-        _hx_o.a1 = None
-        _hx_o.a2 = None
-haxe_crypto_Adler32._hx_class = haxe_crypto_Adler32
-_hx_classes["haxe.crypto.Adler32"] = haxe_crypto_Adler32
-
-
 class haxe_ds_BalancedTree:
     _hx_class_name = "haxe.ds.BalancedTree"
     __slots__ = ("root",)
@@ -4064,7 +4017,7 @@ class haxe_ds_List:
     _hx_class_name = "haxe.ds.List"
     __slots__ = ("h", "q", "length")
     _hx_fields = ["h", "q", "length"]
-    _hx_methods = ["add", "push", "pop"]
+    _hx_methods = ["add", "pop"]
 
     def __init__(self):
         self.q = None
@@ -4078,16 +4031,6 @@ class haxe_ds_List:
         else:
             self.q.next = x
         self.q = x
-        _hx_local_0 = self
-        _hx_local_1 = _hx_local_0.length
-        _hx_local_0.length = (_hx_local_1 + 1)
-        _hx_local_1
-
-    def push(self,item):
-        x = haxe_ds__List_ListNode(item,self.h)
-        self.h = x
-        if (self.q is None):
-            self.q = x
         _hx_local_0 = self
         _hx_local_1 = _hx_local_0.length
         _hx_local_0.length = (_hx_local_1 + 1)
@@ -4500,82 +4443,6 @@ haxe_io_BytesBuffer._hx_class = haxe_io_BytesBuffer
 _hx_classes["haxe.io.BytesBuffer"] = haxe_io_BytesBuffer
 
 
-class haxe_io_BytesInput(haxe_io_Input):
-    _hx_class_name = "haxe.io.BytesInput"
-    __slots__ = ("b", "pos", "len", "totlen")
-    _hx_fields = ["b", "pos", "len", "totlen"]
-    _hx_methods = ["readByte", "readBytes"]
-    _hx_statics = []
-    _hx_interfaces = []
-    _hx_super = haxe_io_Input
-
-
-    def __init__(self,b,pos = None,_hx_len = None):
-        if (pos is None):
-            pos = 0
-        if (_hx_len is None):
-            _hx_len = (b.length - pos)
-        if (((pos < 0) or ((_hx_len < 0))) or (((pos + _hx_len) > b.length))):
-            raise _HxException(haxe_io_Error.OutsideBounds)
-        self.b = b.b
-        self.pos = pos
-        self.len = _hx_len
-        self.totlen = _hx_len
-        self.set_bigEndian(False)
-
-    def readByte(self):
-        if (self.len == 0):
-            raise _HxException(haxe_io_Eof())
-        _hx_local_0 = self
-        _hx_local_1 = _hx_local_0.len
-        _hx_local_0.len = (_hx_local_1 - 1)
-        _hx_local_1
-        def _hx_local_5():
-            def _hx_local_4():
-                _hx_local_2 = self
-                _hx_local_3 = _hx_local_2.pos
-                _hx_local_2.pos = (_hx_local_3 + 1)
-                return _hx_local_3
-            return self.b[_hx_local_4()]
-        return _hx_local_5()
-
-    def readBytes(self,buf,pos,_hx_len):
-        if (((pos < 0) or ((_hx_len < 0))) or (((pos + _hx_len) > buf.length))):
-            raise _HxException(haxe_io_Error.OutsideBounds)
-        if ((self.len == 0) and ((_hx_len > 0))):
-            raise _HxException(haxe_io_Eof())
-        if (self.len < _hx_len):
-            _hx_len = self.len
-        b1 = self.b
-        b2 = buf.b
-        _g = 0
-        _g1 = _hx_len
-        while (_g < _g1):
-            i = _g
-            _g = (_g + 1)
-            b2[(pos + i)] = b1[(self.pos + i)]
-        _hx_local_0 = self
-        _hx_local_1 = _hx_local_0.pos
-        _hx_local_0.pos = (_hx_local_1 + _hx_len)
-        _hx_local_0.pos
-        _hx_local_2 = self
-        _hx_local_3 = _hx_local_2.len
-        _hx_local_2.len = (_hx_local_3 - _hx_len)
-        _hx_local_2.len
-        return _hx_len
-
-    @staticmethod
-    def _hx_empty_init(_hx_o):
-        _hx_o.b = None
-        _hx_o.pos = None
-        _hx_o.len = None
-        _hx_o.totlen = None
-        _hx_o.position = None
-        _hx_o.length = None
-haxe_io_BytesInput._hx_class = haxe_io_BytesInput
-_hx_classes["haxe.io.BytesInput"] = haxe_io_BytesInput
-
-
 class haxe_io_BytesOutput(haxe_io_Output):
     _hx_class_name = "haxe.io.BytesOutput"
     __slots__ = ("b",)
@@ -4675,599 +4542,6 @@ class haxe_macro_Printer:
 haxe_macro_Printer._hx_class = haxe_macro_Printer
 _hx_classes["haxe.macro.Printer"] = haxe_macro_Printer
 
-
-class haxe_zip_Compress:
-    _hx_class_name = "haxe.zip.Compress"
-    __slots__ = ()
-    _hx_statics = ["run"]
-
-    @staticmethod
-    def run(s,level):
-        raise _HxException("Not implemented for this platform")
-haxe_zip_Compress._hx_class = haxe_zip_Compress
-_hx_classes["haxe.zip.Compress"] = haxe_zip_Compress
-
-class haxe_zip_Huffman(Enum):
-    __slots__ = ()
-    _hx_class_name = "haxe.zip.Huffman"
-    _hx_constructs = ["Found", "NeedBit", "NeedBits"]
-
-    @staticmethod
-    def Found(i):
-        return haxe_zip_Huffman("Found", 0, [i])
-
-    @staticmethod
-    def NeedBit(left,right):
-        return haxe_zip_Huffman("NeedBit", 1, [left,right])
-
-    @staticmethod
-    def NeedBits(n,table):
-        return haxe_zip_Huffman("NeedBits", 2, [n,table])
-haxe_zip_Huffman._hx_class = haxe_zip_Huffman
-_hx_classes["haxe.zip.Huffman"] = haxe_zip_Huffman
-
-
-class haxe_zip_HuffTools:
-    _hx_class_name = "haxe.zip.HuffTools"
-    __slots__ = ()
-    _hx_methods = ["treeDepth", "treeCompress", "treeWalk", "treeMake", "make"]
-
-    def __init__(self):
-        pass
-
-    def treeDepth(self,t):
-        tmp = t.index
-        if (tmp == 0):
-            return 0
-        elif (tmp == 1):
-            da = self.treeDepth(t.params[0])
-            db = self.treeDepth(t.params[1])
-            return (1 + ((da if ((da < db)) else db)))
-        elif (tmp == 2):
-            raise _HxException("assert")
-        else:
-            pass
-
-    def treeCompress(self,t):
-        d = self.treeDepth(t)
-        if (d == 0):
-            return t
-        if (d == 1):
-            if (t.index == 1):
-                return haxe_zip_Huffman.NeedBit(self.treeCompress(t.params[0]),self.treeCompress(t.params[1]))
-            else:
-                raise _HxException("assert")
-        size = (1 << d)
-        table = list()
-        _g = 0
-        while (_g < size):
-            _g = (_g + 1)
-            table.append(haxe_zip_Huffman.Found(-1))
-        self.treeWalk(table,0,0,d,t)
-        return haxe_zip_Huffman.NeedBits(d,table)
-
-    def treeWalk(self,table,p,cd,d,t):
-        if (t.index == 1):
-            if (d > 0):
-                self.treeWalk(table,p,(cd + 1),(d - 1),t.params[0])
-                self.treeWalk(table,(p | ((1 << cd))),(cd + 1),(d - 1),t.params[1])
-            else:
-                python_internal_ArrayImpl._set(table, p, self.treeCompress(t))
-        else:
-            python_internal_ArrayImpl._set(table, p, self.treeCompress(t))
-
-    def treeMake(self,bits,maxbits,v,_hx_len):
-        if (_hx_len > maxbits):
-            raise _HxException("Invalid huffman")
-        idx = ((v << 5) | _hx_len)
-        if (idx in bits.h):
-            return haxe_zip_Huffman.Found(bits.h.get(idx,None))
-        v = (v << 1)
-        _hx_len = (_hx_len + 1)
-        return haxe_zip_Huffman.NeedBit(self.treeMake(bits,maxbits,v,_hx_len),self.treeMake(bits,maxbits,(v | 1),_hx_len))
-
-    def make(self,lengths,pos,nlengths,maxbits):
-        counts = list()
-        tmp = list()
-        if (maxbits > 32):
-            raise _HxException("Invalid huffman")
-        _g = 0
-        while (_g < maxbits):
-            _g = (_g + 1)
-            counts.append(0)
-            tmp.append(0)
-        _g2 = 0
-        while (_g2 < nlengths):
-            i = _g2
-            _g2 = (_g2 + 1)
-            p = python_internal_ArrayImpl._get(lengths, (i + pos))
-            if (p >= maxbits):
-                raise _HxException("Invalid huffman")
-            python_internal_ArrayImpl._set(counts, p, ((counts[p] if p >= 0 and p < len(counts) else None) + 1))
-        code = 0
-        _g4 = 1
-        _g5 = (maxbits - 1)
-        while (_g4 < _g5):
-            i1 = _g4
-            _g4 = (_g4 + 1)
-            code = ((code + (counts[i1] if i1 >= 0 and i1 < len(counts) else None)) << 1)
-            python_internal_ArrayImpl._set(tmp, i1, code)
-        bits = haxe_ds_IntMap()
-        _g6 = 0
-        while (_g6 < nlengths):
-            i2 = _g6
-            _g6 = (_g6 + 1)
-            l = python_internal_ArrayImpl._get(lengths, (i2 + pos))
-            if (l != 0):
-                n = python_internal_ArrayImpl._get(tmp, (l - 1))
-                python_internal_ArrayImpl._set(tmp, (l - 1), (n + 1))
-                bits.set(((n << 5) | l),i2)
-        return self.treeCompress(haxe_zip_Huffman.NeedBit(self.treeMake(bits,maxbits,0,1),self.treeMake(bits,maxbits,1,1)))
-
-    @staticmethod
-    def _hx_empty_init(_hx_o):        pass
-haxe_zip_HuffTools._hx_class = haxe_zip_HuffTools
-_hx_classes["haxe.zip.HuffTools"] = haxe_zip_HuffTools
-
-
-class haxe_zip__InflateImpl_Window:
-    _hx_class_name = "haxe.zip._InflateImpl.Window"
-    __slots__ = ("buffer", "pos", "crc")
-    _hx_fields = ["buffer", "pos", "crc"]
-    _hx_methods = ["slide", "addBytes", "addByte", "getLastChar", "available", "checksum"]
-
-    def __init__(self,hasCrc):
-        self.crc = None
-        self.buffer = haxe_io_Bytes.alloc(65536)
-        self.pos = 0
-        if hasCrc:
-            self.crc = haxe_crypto_Adler32()
-
-    def slide(self):
-        if (self.crc is not None):
-            self.crc.update(self.buffer,0,32768)
-        b = haxe_io_Bytes.alloc(65536)
-        _hx_local_0 = self
-        _hx_local_1 = _hx_local_0.pos
-        _hx_local_0.pos = (_hx_local_1 - 32768)
-        _hx_local_0.pos
-        b.blit(0,self.buffer,32768,self.pos)
-        self.buffer = b
-
-    def addBytes(self,b,p,_hx_len):
-        if ((self.pos + _hx_len) > 65536):
-            self.slide()
-        self.buffer.blit(self.pos,b,p,_hx_len)
-        _hx_local_0 = self
-        _hx_local_1 = _hx_local_0.pos
-        _hx_local_0.pos = (_hx_local_1 + _hx_len)
-        _hx_local_0.pos
-
-    def addByte(self,c):
-        if (self.pos == 65536):
-            self.slide()
-        self.buffer.b[self.pos] = (c & 255)
-        _hx_local_0 = self
-        _hx_local_1 = _hx_local_0.pos
-        _hx_local_0.pos = (_hx_local_1 + 1)
-        _hx_local_1
-
-    def getLastChar(self):
-        return self.buffer.b[(self.pos - 1)]
-
-    def available(self):
-        return self.pos
-
-    def checksum(self):
-        if (self.crc is not None):
-            self.crc.update(self.buffer,0,self.pos)
-        return self.crc
-
-    @staticmethod
-    def _hx_empty_init(_hx_o):
-        _hx_o.buffer = None
-        _hx_o.pos = None
-        _hx_o.crc = None
-haxe_zip__InflateImpl_Window._hx_class = haxe_zip__InflateImpl_Window
-_hx_classes["haxe.zip._InflateImpl.Window"] = haxe_zip__InflateImpl_Window
-
-class haxe_zip__InflateImpl_State(Enum):
-    __slots__ = ()
-    _hx_class_name = "haxe.zip._InflateImpl.State"
-    _hx_constructs = ["Head", "Block", "CData", "Flat", "Crc", "Dist", "DistOne", "Done"]
-haxe_zip__InflateImpl_State.Head = haxe_zip__InflateImpl_State("Head", 0, list())
-haxe_zip__InflateImpl_State.Block = haxe_zip__InflateImpl_State("Block", 1, list())
-haxe_zip__InflateImpl_State.CData = haxe_zip__InflateImpl_State("CData", 2, list())
-haxe_zip__InflateImpl_State.Flat = haxe_zip__InflateImpl_State("Flat", 3, list())
-haxe_zip__InflateImpl_State.Crc = haxe_zip__InflateImpl_State("Crc", 4, list())
-haxe_zip__InflateImpl_State.Dist = haxe_zip__InflateImpl_State("Dist", 5, list())
-haxe_zip__InflateImpl_State.DistOne = haxe_zip__InflateImpl_State("DistOne", 6, list())
-haxe_zip__InflateImpl_State.Done = haxe_zip__InflateImpl_State("Done", 7, list())
-haxe_zip__InflateImpl_State._hx_class = haxe_zip__InflateImpl_State
-_hx_classes["haxe.zip._InflateImpl.State"] = haxe_zip__InflateImpl_State
-
-
-class haxe_zip_InflateImpl:
-    _hx_class_name = "haxe.zip.InflateImpl"
-    __slots__ = ("nbits", "bits", "state", "isFinal", "huffman", "huffdist", "htools", "len", "dist", "needed", "output", "outpos", "input", "lengths", "window")
-    _hx_fields = ["nbits", "bits", "state", "isFinal", "huffman", "huffdist", "htools", "len", "dist", "needed", "output", "outpos", "input", "lengths", "window"]
-    _hx_methods = ["buildFixedHuffman", "readBytes", "getBits", "getBit", "getRevBits", "resetBits", "addBytes", "addByte", "addDistOne", "addDist", "applyHuffman", "inflateLengths", "inflateLoop"]
-    _hx_statics = ["LEN_EXTRA_BITS_TBL", "LEN_BASE_VAL_TBL", "DIST_EXTRA_BITS_TBL", "DIST_BASE_VAL_TBL", "CODE_LENGTHS_POS", "FIXED_HUFFMAN", "run"]
-
-    def __init__(self,i,header = True,crc = True):
-        if (header is None):
-            header = True
-        if (crc is None):
-            crc = True
-        self.window = None
-        self.lengths = None
-        self.input = None
-        self.outpos = None
-        self.output = None
-        self.needed = None
-        self.dist = None
-        self.len = None
-        self.huffdist = None
-        self.huffman = None
-        self.state = None
-        self.bits = None
-        self.nbits = None
-        self.isFinal = False
-        self.htools = haxe_zip_HuffTools()
-        self.huffman = self.buildFixedHuffman()
-        self.huffdist = None
-        self.len = 0
-        self.dist = 0
-        self.state = (haxe_zip__InflateImpl_State.Head if header else haxe_zip__InflateImpl_State.Block)
-        self.input = i
-        self.bits = 0
-        self.nbits = 0
-        self.needed = 0
-        self.output = None
-        self.outpos = 0
-        self.lengths = list()
-        self.lengths.append(-1)
-        self.lengths.append(-1)
-        self.lengths.append(-1)
-        self.lengths.append(-1)
-        self.lengths.append(-1)
-        self.lengths.append(-1)
-        self.lengths.append(-1)
-        self.lengths.append(-1)
-        self.lengths.append(-1)
-        self.lengths.append(-1)
-        self.lengths.append(-1)
-        self.lengths.append(-1)
-        self.lengths.append(-1)
-        self.lengths.append(-1)
-        self.lengths.append(-1)
-        self.lengths.append(-1)
-        self.lengths.append(-1)
-        self.lengths.append(-1)
-        self.lengths.append(-1)
-        self.window = haxe_zip__InflateImpl_Window(crc)
-
-    def buildFixedHuffman(self):
-        if (haxe_zip_InflateImpl.FIXED_HUFFMAN is not None):
-            return haxe_zip_InflateImpl.FIXED_HUFFMAN
-        a = list()
-        _g = 0
-        while (_g < 288):
-            n = _g
-            _g = (_g + 1)
-            a.append((8 if ((n <= 143)) else (9 if ((n <= 255)) else (7 if ((n <= 279)) else 8))))
-        haxe_zip_InflateImpl.FIXED_HUFFMAN = self.htools.make(a,0,288,10)
-        return haxe_zip_InflateImpl.FIXED_HUFFMAN
-
-    def readBytes(self,b,pos,_hx_len):
-        self.needed = _hx_len
-        self.outpos = pos
-        self.output = b
-        if (_hx_len > 0):
-            while self.inflateLoop():
-                pass
-        return (_hx_len - self.needed)
-
-    def getBits(self,n):
-        while (self.nbits < n):
-            _hx_local_0 = self
-            _hx_local_1 = _hx_local_0.bits
-            _hx_local_0.bits = (_hx_local_1 | ((self.input.readByte() << self.nbits)))
-            _hx_local_0.bits
-            _hx_local_2 = self
-            _hx_local_3 = _hx_local_2.nbits
-            _hx_local_2.nbits = (_hx_local_3 + 8)
-            _hx_local_2.nbits
-        b = (self.bits & ((((1 << n)) - 1)))
-        _hx_local_4 = self
-        _hx_local_5 = _hx_local_4.nbits
-        _hx_local_4.nbits = (_hx_local_5 - n)
-        _hx_local_4.nbits
-        _hx_local_6 = self
-        _hx_local_7 = _hx_local_6.bits
-        _hx_local_6.bits = (_hx_local_7 >> n)
-        _hx_local_6.bits
-        return b
-
-    def getBit(self):
-        if (self.nbits == 0):
-            self.nbits = 8
-            self.bits = self.input.readByte()
-        b = (((self.bits & 1)) == 1)
-        _hx_local_0 = self
-        _hx_local_1 = _hx_local_0.nbits
-        _hx_local_0.nbits = (_hx_local_1 - 1)
-        _hx_local_1
-        _hx_local_2 = self
-        _hx_local_3 = _hx_local_2.bits
-        _hx_local_2.bits = (_hx_local_3 >> 1)
-        _hx_local_2.bits
-        return b
-
-    def getRevBits(self,n):
-        if (n == 0):
-            return 0
-        elif self.getBit():
-            return ((1 << ((n - 1))) | self.getRevBits((n - 1)))
-        else:
-            return self.getRevBits((n - 1))
-
-    def resetBits(self):
-        self.bits = 0
-        self.nbits = 0
-
-    def addBytes(self,b,p,_hx_len):
-        self.window.addBytes(b,p,_hx_len)
-        self.output.blit(self.outpos,b,p,_hx_len)
-        _hx_local_0 = self
-        _hx_local_1 = _hx_local_0.needed
-        _hx_local_0.needed = (_hx_local_1 - _hx_len)
-        _hx_local_0.needed
-        _hx_local_2 = self
-        _hx_local_3 = _hx_local_2.outpos
-        _hx_local_2.outpos = (_hx_local_3 + _hx_len)
-        _hx_local_2.outpos
-
-    def addByte(self,b):
-        self.window.addByte(b)
-        self.output.b[self.outpos] = (b & 255)
-        _hx_local_0 = self
-        _hx_local_1 = _hx_local_0.needed
-        _hx_local_0.needed = (_hx_local_1 - 1)
-        _hx_local_1
-        _hx_local_2 = self
-        _hx_local_3 = _hx_local_2.outpos
-        _hx_local_2.outpos = (_hx_local_3 + 1)
-        _hx_local_3
-
-    def addDistOne(self,n):
-        c = self.window.getLastChar()
-        _g = 0
-        while (_g < n):
-            _g = (_g + 1)
-            self.addByte(c)
-
-    def addDist(self,d,_hx_len):
-        self.addBytes(self.window.buffer,(self.window.pos - d),_hx_len)
-
-    def applyHuffman(self,h):
-        tmp = h.index
-        if (tmp == 0):
-            return h.params[0]
-        elif (tmp == 1):
-            return self.applyHuffman((h.params[1] if (self.getBit()) else h.params[0]))
-        elif (tmp == 2):
-            return self.applyHuffman(python_internal_ArrayImpl._get(h.params[1], self.getBits(h.params[0])))
-        else:
-            pass
-
-    def inflateLengths(self,a,_hx_max):
-        i = 0
-        prev = 0
-        while (i < _hx_max):
-            n = self.applyHuffman(self.huffman)
-            if ((((((((((((((((n == 15) or ((n == 14))) or ((n == 13))) or ((n == 12))) or ((n == 11))) or ((n == 10))) or ((n == 9))) or ((n == 8))) or ((n == 7))) or ((n == 6))) or ((n == 5))) or ((n == 4))) or ((n == 3))) or ((n == 2))) or ((n == 1))) or ((n == 0))):
-                prev = n
-                python_internal_ArrayImpl._set(a, i, n)
-                i = (i + 1)
-            elif (n == 16):
-                end = ((i + 3) + self.getBits(2))
-                if (end > _hx_max):
-                    raise _HxException("Invalid data")
-                while (i < end):
-                    python_internal_ArrayImpl._set(a, i, prev)
-                    i = (i + 1)
-            elif (n == 17):
-                i = (i + ((3 + self.getBits(3))))
-                if (i > _hx_max):
-                    raise _HxException("Invalid data")
-            elif (n == 18):
-                i = (i + ((11 + self.getBits(7))))
-                if (i > _hx_max):
-                    raise _HxException("Invalid data")
-            else:
-                raise _HxException("Invalid data")
-
-    def inflateLoop(self):
-        tmp = self.state.index
-        if (tmp == 0):
-            cmf = self.input.readByte()
-            if (((cmf & 15)) != 8):
-                raise _HxException("Invalid data")
-            flg = self.input.readByte()
-            if (HxOverrides.mod(((((cmf << 8)) + flg)), 31) != 0):
-                raise _HxException("Invalid data")
-            if (((flg & 32)) != 0):
-                raise _HxException("Unsupported dictionary")
-            self.state = haxe_zip__InflateImpl_State.Block
-            return True
-        elif (tmp == 1):
-            self.isFinal = self.getBit()
-            _g = self.getBits(2)
-            if (_g == 0):
-                self.len = self.input.readUInt16()
-                if (self.input.readUInt16() != ((65535 - self.len))):
-                    raise _HxException("Invalid data")
-                self.state = haxe_zip__InflateImpl_State.Flat
-                r = self.inflateLoop()
-                self.resetBits()
-                return r
-            elif (_g == 1):
-                self.huffman = self.buildFixedHuffman()
-                self.huffdist = None
-                self.state = haxe_zip__InflateImpl_State.CData
-                return True
-            elif (_g == 2):
-                hlit = (self.getBits(5) + 257)
-                hdist = (self.getBits(5) + 1)
-                hclen = (self.getBits(4) + 4)
-                _g1 = 0
-                while (_g1 < hclen):
-                    i = _g1
-                    _g1 = (_g1 + 1)
-                    python_internal_ArrayImpl._set(self.lengths, python_internal_ArrayImpl._get(haxe_zip_InflateImpl.CODE_LENGTHS_POS, i), self.getBits(3))
-                _g2 = hclen
-                while (_g2 < 19):
-                    i1 = _g2
-                    _g2 = (_g2 + 1)
-                    python_internal_ArrayImpl._set(self.lengths, python_internal_ArrayImpl._get(haxe_zip_InflateImpl.CODE_LENGTHS_POS, i1), 0)
-                self.huffman = self.htools.make(self.lengths,0,19,8)
-                lengths = list()
-                _g4 = 0
-                _g5 = (hlit + hdist)
-                while (_g4 < _g5):
-                    _g4 = (_g4 + 1)
-                    lengths.append(0)
-                self.inflateLengths(lengths,(hlit + hdist))
-                self.huffdist = self.htools.make(lengths,hlit,hdist,16)
-                self.huffman = self.htools.make(lengths,0,hlit,16)
-                self.state = haxe_zip__InflateImpl_State.CData
-                return True
-            else:
-                raise _HxException("Invalid data")
-        elif (tmp == 2):
-            n = self.applyHuffman(self.huffman)
-            if (n < 256):
-                self.addByte(n)
-                return (self.needed > 0)
-            elif (n == 256):
-                self.state = (haxe_zip__InflateImpl_State.Crc if (self.isFinal) else haxe_zip__InflateImpl_State.Block)
-                return True
-            else:
-                n = (n - 257)
-                extra_bits = python_internal_ArrayImpl._get(haxe_zip_InflateImpl.LEN_EXTRA_BITS_TBL, n)
-                if (extra_bits == -1):
-                    raise _HxException("Invalid data")
-                self.len = (python_internal_ArrayImpl._get(haxe_zip_InflateImpl.LEN_BASE_VAL_TBL, n) + self.getBits(extra_bits))
-                dist_code = (self.getRevBits(5) if ((self.huffdist is None)) else self.applyHuffman(self.huffdist))
-                extra_bits = python_internal_ArrayImpl._get(haxe_zip_InflateImpl.DIST_EXTRA_BITS_TBL, dist_code)
-                if (extra_bits == -1):
-                    raise _HxException("Invalid data")
-                self.dist = (python_internal_ArrayImpl._get(haxe_zip_InflateImpl.DIST_BASE_VAL_TBL, dist_code) + self.getBits(extra_bits))
-                if (self.dist > self.window.available()):
-                    raise _HxException("Invalid data")
-                self.state = (haxe_zip__InflateImpl_State.DistOne if ((self.dist == 1)) else haxe_zip__InflateImpl_State.Dist)
-                return True
-        elif (tmp == 3):
-            rlen = (self.len if ((self.len < self.needed)) else self.needed)
-            _hx_bytes = self.input.read(rlen)
-            _hx_local_2 = self
-            _hx_local_3 = _hx_local_2.len
-            _hx_local_2.len = (_hx_local_3 - rlen)
-            _hx_local_2.len
-            self.addBytes(_hx_bytes,0,rlen)
-            if (self.len == 0):
-                self.state = (haxe_zip__InflateImpl_State.Crc if (self.isFinal) else haxe_zip__InflateImpl_State.Block)
-            return (self.needed > 0)
-        elif (tmp == 4):
-            calc = self.window.checksum()
-            if (calc is None):
-                self.state = haxe_zip__InflateImpl_State.Done
-                return True
-            if (not calc.equals(haxe_crypto_Adler32.read(self.input))):
-                raise _HxException("Invalid CRC")
-            self.state = haxe_zip__InflateImpl_State.Done
-            return True
-        elif (tmp == 5):
-            while ((self.len > 0) and ((self.needed > 0))):
-                rdist = (self.len if ((self.len < self.dist)) else self.dist)
-                rlen1 = (self.needed if ((self.needed < rdist)) else rdist)
-                self.addDist(self.dist,rlen1)
-                _hx_local_4 = self
-                _hx_local_5 = _hx_local_4.len
-                _hx_local_4.len = (_hx_local_5 - rlen1)
-                _hx_local_4.len
-            if (self.len == 0):
-                self.state = haxe_zip__InflateImpl_State.CData
-            return (self.needed > 0)
-        elif (tmp == 6):
-            rlen2 = (self.len if ((self.len < self.needed)) else self.needed)
-            self.addDistOne(rlen2)
-            _hx_local_6 = self
-            _hx_local_7 = _hx_local_6.len
-            _hx_local_6.len = (_hx_local_7 - rlen2)
-            _hx_local_6.len
-            if (self.len == 0):
-                self.state = haxe_zip__InflateImpl_State.CData
-            return (self.needed > 0)
-        elif (tmp == 7):
-            return False
-        else:
-            pass
-
-    @staticmethod
-    def run(i,bufsize = 65536):
-        if (bufsize is None):
-            bufsize = 65536
-        buf = haxe_io_Bytes.alloc(bufsize)
-        output = haxe_io_BytesBuffer()
-        inflate = haxe_zip_InflateImpl(i)
-        while True:
-            _hx_len = inflate.readBytes(buf,0,bufsize)
-            if ((_hx_len < 0) or ((_hx_len > buf.length))):
-                raise _HxException(haxe_io_Error.OutsideBounds)
-            b2 = buf.b
-            _g = 0
-            while (_g < _hx_len):
-                i1 = _g
-                _g = (_g + 1)
-                output.b.append(b2[i1])
-            if (_hx_len < bufsize):
-                break
-        return output.getBytes()
-
-    @staticmethod
-    def _hx_empty_init(_hx_o):
-        _hx_o.nbits = None
-        _hx_o.bits = None
-        _hx_o.state = None
-        _hx_o.isFinal = None
-        _hx_o.huffman = None
-        _hx_o.huffdist = None
-        _hx_o.htools = None
-        _hx_o.len = None
-        _hx_o.dist = None
-        _hx_o.needed = None
-        _hx_o.output = None
-        _hx_o.outpos = None
-        _hx_o.input = None
-        _hx_o.lengths = None
-        _hx_o.window = None
-haxe_zip_InflateImpl._hx_class = haxe_zip_InflateImpl
-_hx_classes["haxe.zip.InflateImpl"] = haxe_zip_InflateImpl
-
-
-class haxe_zip_Uncompress:
-    _hx_class_name = "haxe.zip.Uncompress"
-    __slots__ = ()
-    _hx_statics = ["run"]
-
-    @staticmethod
-    def run(src,bufsize = None):
-        return haxe_zip_InflateImpl.run(haxe_io_BytesInput(src),bufsize)
-haxe_zip_Uncompress._hx_class = haxe_zip_Uncompress
-_hx_classes["haxe.zip.Uncompress"] = haxe_zip_Uncompress
-
 class hxd_storage_CreateResult(Enum):
     __slots__ = ()
     _hx_class_name = "hxd.storage.CreateResult"
@@ -5332,7 +4606,6 @@ class hxd_storage_Book:
         return (((("./" + HxOverrides.stringOrNull(hxd_sys_Engine.get_path())) + "/") + HxOverrides.stringOrNull(self.name)) + ".hxbk")
 
     def get_stat(self):
-        hxd_sys_Engine.ensure()
         self.ensure()
         if (self._stat is None):
             self._stat = sys_FileSystem.stat(self.get_file())
@@ -5382,6 +4655,7 @@ class hxd_storage_Book:
         self.deserializationHooks.insert(0, deserialize)
 
     def ensure(self):
+        hxd_sys_Engine.ensure()
         if (not sys_FileSystem.exists(self.get_file())):
             output = sys_io_File.write(self.get_file(),True)
             output.writeString("")
@@ -5402,13 +4676,14 @@ class hxd_storage_Book:
 
     def cleanse(self):
         dirty = []
-        pageNo = self.retention.keys()
-        while pageNo.hasNext():
-            pageNo1 = pageNo.next()
-            page = self.retention.h.get(pageNo1,None)
+        retent = Lambda.array(self.retention)
+        _g = 0
+        while (_g < len(retent)):
+            page = (retent[_g] if _g >= 0 and _g < len(retent) else None)
+            _g = (_g + 1)
             if page.dirty:
                 dirty.append(page)
-                self.retention.remove(pageNo1)
+                self.retention.remove(page.number[0])
         return dirty
 
     def calculatePadding(self):
@@ -5436,19 +4711,18 @@ class hxd_storage_Book:
         while (_g < _g1):
             i = _g
             _g = (_g + 1)
-            def _hx_local_2(i1):
+            done1 = [tink_core_FutureTrigger()]
+            def _hx_local_2(done2,i1):
                 def _hx_local_0():
                     nonlocal total
-                    count = Lambda.count(_gthis.read((i1[0] if 0 < len(i1) else None)).records)
-                    total = (total + count)
-                    haxe_Log.trace((((((("page-" + Std.string((i1[0] if 0 < len(i1) else None))) + " count: ") + Std.string(count)) + " (total: ") + Std.string(total)) + ")"),_hx_AnonObject({'fileName': "src/hxd/storage/Book.hx", 'lineNumber': 200, 'className': "hxd.storage.Book", 'methodName': "count"}))
-                    return
+                    total = (total + Lambda.count(_gthis.read((i1[0] if 0 < len(i1) else None)).records))
+                    return (done2[0] if 0 < len(done2) else None).trigger(tink_core_Noise.Noise)
                 return _hx_local_0
-            tmp = _hx_local_2([i])
+            tmp = _hx_local_2(done1,[i])
             worker.work(tink_runloop__Task_Task_Impl_.ofFunction(tmp))
-            x = tink_RunLoop.current.delegate(tink_core__Lazy_LazyConst(tink_core_Noise.Noise),worker)
-            futures.append(x)
+            futures.append((done1[0] if 0 < len(done1) else None))
         def _hx_local_3(_):
+            haxe_Log.trace(("Count: " + Std.string(total)),_hx_AnonObject({'fileName': "src/hxd/storage/Book.hx", 'lineNumber': 210, 'className': "hxd.storage.Book", 'methodName': "count"}))
             done.trigger(total)
             worker.kill()
             return
@@ -5457,7 +4731,6 @@ class hxd_storage_Book:
 
     def read(self,pageNo):
         if (pageNo in self.retention.h):
-            haxe_Log.trace("From retention",_hx_AnonObject({'fileName': "src/hxd/storage/Book.hx", 'lineNumber': 213, 'className': "hxd.storage.Book", 'methodName': "read"}))
             page = self.retention.h.get(pageNo,None)
             ret = [None]*1
             ret[0] = pageNo
@@ -5471,11 +4744,9 @@ class hxd_storage_Book:
             _hx_e1 = _hx_e.val if isinstance(_hx_e, _HxException) else _hx_e
             e = _hx_e1
             newPage = hxd_storage_Page(self)
-            haxe_Log.trace(("Error: " + Std.string(e)),_hx_AnonObject({'fileName': "src/hxd/storage/Book.hx", 'lineNumber': 224, 'className': "hxd.storage.Book", 'methodName': "read"}))
             self.retention.set(pageNo,newPage)
             pSize = -1
         if (pSize == 0):
-            haxe_Log.trace("read blank page.",_hx_AnonObject({'fileName': "src/hxd/storage/Book.hx", 'lineNumber': 229, 'className': "hxd.storage.Book", 'methodName': "read"}))
             newPage1 = hxd_storage_Page(self)
             self.retention.set(pageNo,newPage1)
         else:
@@ -5491,39 +4762,56 @@ class hxd_storage_Book:
                 _hx_e1 = _hx_e.val if isinstance(_hx_e, _HxException) else _hx_e
                 e1 = _hx_e1
                 newPage2 = hxd_storage_Page(self)
-                haxe_Log.trace(("Error: " + Std.string(e1)),_hx_AnonObject({'fileName': "src/hxd/storage/Book.hx", 'lineNumber': 242, 'className': "hxd.storage.Book", 'methodName': "read"}))
                 self.retention.set(pageNo,newPage2)
         return self.retention.h.get(pageNo,None)
 
     def write(self,page):
         _gthis = self
-        def _hx_local_0():
-            isNew = (page.number[0] == -1)
-            if isNew:
-                this1 = page.number
-                param = _gthis.get_pages()
-                this1[0] = param
-                tmp = _gthis.get_file()
-                _gthis.get_writer().append = sys_io_File.append(tmp,True)
-                _gthis.get_writer().append.write(haxe_io_Bytes.alloc(_gthis.pageSize))
-                _gthis.get_writer().append.flush()
-                _gthis.get_writer().append.close()
-                _this = _gthis._sizes
-                x = page.get_size()
-                _this.append(x)
-            _gthis.get_writer().update.seek((page.number[0] * _gthis.pageSize),sys_io_FileSeek.SeekBegin)
-            _gthis.get_writer().update.writeInt16(page.get_size())
-            _gthis.get_writer().update.write(page.get_bytes())
-            _gthis.get_writer().update.flush()
-            _gthis._stat = None
-            if (not isNew):
-                python_internal_ArrayImpl._set(_gthis._sizes, page.number[0], page.get_size())
-            return
-        self.workers.write.work(tink_runloop__Task_Task_Impl_.ofFunction(_hx_local_0))
-        return tink_RunLoop.current.delegate(tink_core__Lazy_LazyConst(tink_core_Noise.Noise),self.workers.write)
+        done = tink_core_FutureTrigger()
+        if (page.get_size() > self.pageSize):
+            results = []
+            def _hx_local_4(result):
+                results.append(result)
+                return tink_core__Future_SyncFuture(tink_core__Lazy_LazyConst(tink_streams_Handled.Resume))
+            def _hx_local_3():
+                futures = []
+                def _hx_local_0(result1):
+                    if (result1.index == 0):
+                        x = _gthis.write(result1.params[0])
+                        futures.append(x)
+                    return
+                Lambda.iter(results,_hx_local_0)
+                def _hx_local_2():
+                    def _hx_local_1(_):
+                        return done.trigger(tink_core_Noise.Noise)
+                    return tink_core__Future_Future_Impl_.ofMany(futures).handle(_hx_local_1)
+                return _hx_local_2()
+            self.create(Lambda.array(page.records)).forEach(tink_streams__Stream_Handler_Impl_.ofSafe(_hx_local_4)).handle(tink_core__Callback_Callback_Impl_.fromNiladic(_hx_local_3))
+        else:
+            def _hx_local_5():
+                if (page.number[0] == -1):
+                    this1 = page.number
+                    param = _gthis.get_pages()
+                    this1[0] = param
+                    append = sys_io_File.append(_gthis.get_file(),True)
+                    append.write(haxe_io_Bytes.alloc(_gthis.pageSize))
+                    append.flush()
+                    append.close()
+                haxe_Log.trace(("Writing: " + HxOverrides.stringOrNull(tink_core__Ref_Ref_Impl_.toString(page.number))),_hx_AnonObject({'fileName': "src/hxd/storage/Book.hx", 'lineNumber': 294, 'className': "hxd.storage.Book", 'methodName': "write"}))
+                update = sys_io_File.update(_gthis.get_file(),True)
+                update.seek((page.number[0] * _gthis.pageSize),sys_io_FileSeek.SeekBegin)
+                update.writeInt16(page.get_size())
+                update.write(page.get_bytes())
+                update.flush()
+                update.close()
+                _gthis._stat = None
+                _gthis._sizes = None
+                return done.trigger(tink_core_Noise.Noise)
+            self.workers.write.work(tink_runloop__Task_Task_Impl_.ofFunction(_hx_local_5))
+        return done
 
     def close(self):
-        haxe_Log.trace("Closing...",_hx_AnonObject({'fileName': "src/hxd/storage/Book.hx", 'lineNumber': 273, 'className': "hxd.storage.Book", 'methodName': "close"}))
+        haxe_Log.trace("Closing...",_hx_AnonObject({'fileName': "src/hxd/storage/Book.hx", 'lineNumber': 316, 'className': "hxd.storage.Book", 'methodName': "close"}))
         self.get_writer().update.close()
 
     def refresh(self):
@@ -5532,21 +4820,23 @@ class hxd_storage_Book:
 
     def commit(self):
         _gthis = self
-        haxe_Log.trace("Begin commit.",_hx_AnonObject({'fileName': "src/hxd/storage/Book.hx", 'lineNumber': 284, 'className': "hxd.storage.Book", 'methodName': "commit"}))
         futures = []
-        pageNo = self.retention.keys()
-        while pageNo.hasNext():
-            pageNo1 = pageNo.next()
-            page = self.retention.h.get(pageNo1,None)
-            if page.dirty:
-                x = self.write(page)
-                futures.append(x)
+        pages = []
+        retent = Lambda.array(self.retention)
+        _g = 0
+        while (_g < len(retent)):
+            page = (retent[_g] if _g >= 0 and _g < len(retent) else None)
+            _g = (_g + 1)
+            x = self.write(page)
+            futures.append(x)
+            x1 = page.number
+            pages.append(x1)
         done = tink_core_FutureTrigger()
-        def _hx_local_0(_):
+        def _hx_local_1(_):
             _gthis.cleanse()
-            _gthis.close()
+            haxe_Log.trace(pages,_hx_AnonObject({'fileName': "src/hxd/storage/Book.hx", 'lineNumber': 342, 'className': "hxd.storage.Book", 'methodName': "commit"}))
             return done.trigger(tink_core_Noise.Noise)
-        tink_core__Future_Future_Impl_.ofMany(futures).handle(_hx_local_0)
+        tink_core__Future_Future_Impl_.ofMany(futures).handle(_hx_local_1)
         return done
 
     def create(self,records):
@@ -5555,8 +4845,13 @@ class hxd_storage_Book:
         segments = []
         segment = []
         counter = 0
-        overgrowthFactor = Math.ceil((hxd_storage_Serializer.serialize(records).length / self.pageSize))
+        overgrowthFactor = Math.ceil(((hxd_storage_Serializer.serialize(records,self.postSerialization).length * 2) / self.pageSize))
         segSize = Math.ceil((len(records) / overgrowthFactor))
+        futures = []
+        ret = [None]*1
+        ret[0] = 0
+        ret1 = [None]*1
+        ret1[0] = 0
         _g = 0
         while (_g < len(records)):
             record = (records[_g] if _g >= 0 and _g < len(records) else None)
@@ -5566,90 +4861,105 @@ class hxd_storage_Book:
             if (counter == segSize):
                 counter = 0
                 segments.append(segment)
+                if (len(segment) != 0):
+                    x = self.safeCreate(segment,a.trigger,ret,ret1)
+                    futures.append(x)
+                param = len(futures)
+                ret1[0] = param
                 segment = []
             if (record == python_internal_ArrayImpl._get(records, (len(records) - 1))):
                 segments.append(segment)
-        tink_core__Callback_CallbackList_Impl_.invoke(a.handlers,tink_streams_Yield.Data(hxd_storage_CreateResult.Expect(len(segments))))
-        futures = []
-        _g1 = 0
-        while (_g1 < len(segments)):
-            segment1 = (segments[_g1] if _g1 >= 0 and _g1 < len(segments) else None)
-            _g1 = (_g1 + 1)
-            x = self.safeCreate(segment1,a.trigger,(hxd_storage_CreateHint.FullPage if (((len(segment1) == segSize) and ((len(segments) > 1)))) else hxd_storage_CreateHint.PartialPage))
-            futures.append(x)
-        def _hx_local_3(_):
+                if (len(segment) != 0):
+                    x1 = self.safeCreate(segment,a.trigger,ret,ret1)
+                    futures.append(x1)
+                param1 = len(futures)
+                ret1[0] = param1
+        haxe_Log.trace(("Expected: " + HxOverrides.stringOrNull(tink_core__Ref_Ref_Impl_.toString(ret1))),_hx_AnonObject({'fileName': "src/hxd/storage/Book.hx", 'lineNumber': 379, 'className': "hxd.storage.Book", 'methodName': "create"}))
+        haxe_Log.trace(("Fulfillment: " + HxOverrides.stringOrNull(tink_core__Ref_Ref_Impl_.toString(ret))),_hx_AnonObject({'fileName': "src/hxd/storage/Book.hx", 'lineNumber': 380, 'className': "hxd.storage.Book", 'methodName': "create"}))
+        tink_core__Callback_CallbackList_Impl_.invoke(a.handlers,tink_streams_Yield.Data(hxd_storage_CreateResult.Expect(len(futures))))
+        def _hx_local_2(_):
+            haxe_Log.trace("Done creating",_hx_AnonObject({'fileName': "src/hxd/storage/Book.hx", 'lineNumber': 384, 'className': "hxd.storage.Book", 'methodName': "create"}))
             tink_core__Callback_CallbackList_Impl_.invoke(a.handlers,tink_streams_Yield.End)
             return
-        tink_core__Future_Future_Impl_.ofMany(futures).handle(_hx_local_3)
+        tink_core__Future_Future_Impl_.ofMany(futures).handle(_hx_local_2)
         return stream
 
-    def safeCreate(self,records,emit,hint = hxd_storage_CreateHint.PartialPage,last = False):
-        if (hint is None):
-            hint = hxd_storage_CreateHint.PartialPage
-        if (last is None):
-            last = False
+    def safeCreate(self,records,emit,fulfillment,expected):
         _gthis = self
-        haxe_Log.trace(("HINT: " + Std.string(hint)),_hx_AnonObject({'fileName': "src/hxd/storage/Book.hx", 'lineNumber': 334, 'className': "hxd.storage.Book", 'methodName': "safeCreate"}))
-        estRecordSize = hxd_storage_Serializer.serialize(records,self.postSerialization).length
-        def _hx_local_1():
-            newPage1 = hxd_storage_Page(_gthis)
-            haxe_Log.trace("New page",_hx_AnonObject({'fileName': "src/hxd/storage/Book.hx", 'lineNumber': 338, 'className': "hxd.storage.Book", 'methodName': "safeCreate"}))
-            def _hx_local_0():
-                if newPage1.create(records):
-                    haxe_Log.trace("Working new page",_hx_AnonObject({'fileName': "src/hxd/storage/Book.hx", 'lineNumber': 341, 'className': "hxd.storage.Book", 'methodName': "safeCreate"}))
-                    _gthis.retention.set(-Lambda.count(_gthis.retention),newPage1)
-                    tink_core__Callback_Callback_Impl_.invoke(emit,tink_streams_Yield.Data(hxd_storage_CreateResult.Created(newPage1,records)))
-                    if last:
-                        tink_core__Callback_Callback_Impl_.invoke(emit,tink_streams_Yield.End)
-                else:
-                    raise _HxException(tink_core_TypedError(500,"This should never happen.",_hx_AnonObject({'fileName': "src/hxd/storage/Book.hx", 'lineNumber': 347, 'className': "hxd.storage.Book", 'methodName': "safeCreate"})))
+        done = tink_core_FutureTrigger()
+        def _hx_local_6():
+            def _hx_local_0(val):
+                param = (fulfillment[0] + 1)
+                fulfillment[0] = param
+                tink_core__Callback_Callback_Impl_.invoke(emit,val)
+                if ((fulfillment[0] == expected[0]) and ((expected[0] != 0))):
+                    haxe_Log.trace(((("Reached end: " + HxOverrides.stringOrNull(tink_core__Ref_Ref_Impl_.toString(fulfillment))) + ", ") + HxOverrides.stringOrNull(tink_core__Ref_Ref_Impl_.toString(expected))),_hx_AnonObject({'fileName': "src/hxd/storage/Book.hx", 'lineNumber': 400, 'className': "hxd.storage.Book", 'methodName': "safeCreate"}))
+                    tink_core__Callback_Callback_Impl_.invoke(emit,tink_streams_Yield.End)
+                done.trigger(tink_core_Noise.Noise)
                 return
-            _gthis.workers.allocate.work(tink_runloop__Task_Task_Impl_.ofFunction(_hx_local_0))
-            return tink_RunLoop.current.delegate(tink_core__Lazy_LazyConst(tink_core_Noise.Noise),_gthis.workers.allocate)
-        newPage = _hx_local_1
-        tmp = hint.index
-        if (tmp == 0):
-            return newPage()
-        elif (tmp == 1):
-            haxe_Log.trace(((((((("" + Std.string(self.get_sizes())) + ", ") + Std.string(estRecordSize)) + ", ") + Std.string(self.get_pages())) + ", ") + Std.string(self.get_size())),_hx_AnonObject({'fileName': "src/hxd/storage/Book.hx", 'lineNumber': 356, 'className': "hxd.storage.Book", 'methodName': "safeCreate"}))
-            if (Lambda.count(self.retention) != 0):
-                key = self.retention.keys()
-                while key.hasNext():
-                    key1 = key.next()
-                    page = self.retention.h.get(key1,None)
-                    if ((page.get_size() + estRecordSize) < self.pageSize):
-                        if page.create(records):
-                            tink_core__Callback_Callback_Impl_.invoke(emit,tink_streams_Yield.Data(hxd_storage_CreateResult.Created(page,records)))
-                            return tink_core__Future_SyncFuture(tink_core__Lazy_LazyConst(tink_core_Noise.Noise))
-            if (self.get_size() > self.pageSize):
-                _g = 0
-                _g1 = self.get_pages()
-                while (_g < _g1):
-                    pageNo = _g
-                    _g = (_g + 1)
-                    pageNo1 = [pageNo]
-                    haxe_Log.trace("check page",_hx_AnonObject({'fileName': "src/hxd/storage/Book.hx", 'lineNumber': 370, 'className': "hxd.storage.Book", 'methodName': "safeCreate"}))
-                    if ((python_internal_ArrayImpl._get(self.get_sizes(), (pageNo1[0] if 0 < len(pageNo1) else None)) + estRecordSize) < self.pageSize):
-                        def _hx_local_3(pageNo2):
-                            def _hx_local_2():
-                                haxe_Log.trace("Begin readnig into memory",_hx_AnonObject({'fileName': "src/hxd/storage/Book.hx", 'lineNumber': 373, 'className': "hxd.storage.Book", 'methodName': "safeCreate"}))
-                                page1 = _gthis.read((pageNo2[0] if 0 < len(pageNo2) else None))
-                                haxe_Log.trace(("Read into memory: " + HxOverrides.stringOrNull(tink_core__Ref_Ref_Impl_.toString(page1.number))),_hx_AnonObject({'fileName': "src/hxd/storage/Book.hx", 'lineNumber': 375, 'className': "hxd.storage.Book", 'methodName': "safeCreate"}))
-                                if page1.create(records):
-                                    _gthis.retention.set(page1.number[0],page1)
-                                    tink_core__Callback_Callback_Impl_.invoke(emit,tink_streams_Yield.Data(hxd_storage_CreateResult.Created(page1,records)))
-                                    if last:
-                                        tink_core__Callback_Callback_Impl_.invoke(emit,tink_streams_Yield.End)
-                                    haxe_Log.trace("Done",_hx_AnonObject({'fileName': "src/hxd/storage/Book.hx", 'lineNumber': 381, 'className': "hxd.storage.Book", 'methodName': "safeCreate"}))
-                                else:
-                                    raise _HxException(tink_core_TypedError(500,"This should also never happen.",_hx_AnonObject({'fileName': "src/hxd/storage/Book.hx", 'lineNumber': 383, 'className': "hxd.storage.Book", 'methodName': "safeCreate"})))
-                                return
-                            return _hx_local_2
-                        self.workers.cache.work(tink_runloop__Task_Task_Impl_.ofFunction(_hx_local_3(pageNo1)))
-                        return tink_RunLoop.current.delegate(tink_core__Lazy_LazyConst(tink_core_Noise.Noise),self.workers.cache)
-            return newPage()
-        else:
-            pass
+            doEmit = _hx_local_0
+            def _hx_local_3():
+                newPage1 = hxd_storage_Page(_gthis)
+                done1 = tink_core_FutureTrigger()
+                def _hx_local_2():
+                    if newPage1.create(records):
+                        retentionId = -Lambda.count(_gthis.retention)
+                        while (retentionId in _gthis.retention.h):
+                            retentionId = (retentionId - 1)
+                        _gthis.retention.set(retentionId,newPage1)
+                        doEmit(tink_streams_Yield.Data(hxd_storage_CreateResult.Created(newPage1,records)))
+                        done1.trigger(tink_core_Noise.Noise)
+                    else:
+                        raise _HxException("This shouldn't happen.")
+                    return
+                _gthis.workers.cache.work(tink_runloop__Task_Task_Impl_.ofFunction(_hx_local_2))
+                return done1
+            newPage = _hx_local_3
+            recordSize = hxd_storage_Serializer.serialize(records,_gthis.postSerialization).length
+            maxSpace = _gthis.pageSize
+            retent = Lambda.array(_gthis.retention)
+            knownSizes = haxe_ds_IntMap()
+            _g = 0
+            while (_g < len(retent)):
+                page = (retent[_g] if _g >= 0 and _g < len(retent) else None)
+                _g = (_g + 1)
+                size = page.get_size()
+                if ((recordSize + size) > _gthis.pageSize):
+                    continue
+                knownSizes.set(page.number[0],size)
+                if (size < maxSpace):
+                    if page.create(records):
+                        doEmit(tink_streams_Yield.Data(hxd_storage_CreateResult.Created(page,records)))
+                        done.trigger(tink_core_Noise.Noise)
+                        return tink_core_Noise.Noise
+                    else:
+                        maxSpace = size
+            _g1 = 0
+            _g2 = _gthis.get_pages()
+            while (_g1 < _g2):
+                pageNo = _g1
+                _g1 = (_g1 + 1)
+                if (pageNo in _gthis.retention.h):
+                    continue
+                if ((pageNo in knownSizes.h) and ((knownSizes.h.get(pageNo,None) > maxSpace))):
+                    continue
+                page1 = _gthis.read(pageNo)
+                size1 = page1.get_size()
+                if ((recordSize + size1) > _gthis.pageSize):
+                    continue
+                if (size1 < maxSpace):
+                    if page1.create(records):
+                        doEmit(tink_streams_Yield.Data(hxd_storage_CreateResult.Created(page1,records)))
+                        done.trigger(tink_core_Noise.Noise)
+                        return tink_core_Noise.Noise
+                    else:
+                        maxSpace = size1
+            def _hx_local_5():
+                return done.trigger(tink_core_Noise.Noise)
+            newPage().handle(tink_core__Callback_Callback_Impl_.fromNiladic(_hx_local_5))
+            return tink_core_Noise.Noise
+        self.workers.cache.work(tink_runloop__Task_Task_Impl_.ofFunction(_hx_local_6))
+        return done
 
     @staticmethod
     def open(name):
@@ -5690,34 +5000,35 @@ class hxd_storage_Page:
         self.records = haxe_ds_BalancedTree()
 
     def get_bytes(self):
-        if (self._bytes is None):
-            self._bytes = hxd_storage_Serializer.serialize(self,self.book.postSerialization)
+        self._bytes = hxd_storage_Serializer.serialize(self,self.book.postSerialization)
         return self._bytes
 
     def get_size(self):
-        if (self._size is None):
-            self._size = self.get_bytes().length
+        self._size = self.get_bytes().length
         return self._size
 
     def touch(self):
         self.dirty = True
         self._size = None
+        self._bytes = None
 
     def cleanse(self):
         self.dirty = False
+        self._size = None
+        self._bytes = None
 
     def attempt(self,operation):
         _gthis = self
         tmpRecords = Lambda.array(self.records)
         wasDirty = self.dirty
         try:
-            operation()
             self.touch()
+            operation()
         except Exception as _hx_e:
             _hx_e1 = _hx_e.val if isinstance(_hx_e, _HxException) else _hx_e
             e = _hx_e1
             raise _HxException(e)
-        if (self.get_size() >= self.book.pageSize):
+        if ((self.get_size() + 128) >= self.book.pageSize):
             self.records = haxe_ds_BalancedTree()
             def _hx_local_0(record):
                 _gthis.records.set(record.index,record)
@@ -6118,7 +5429,7 @@ _hx_classes["_HxException"] = _HxException
 class HxOverrides:
     _hx_class_name = "HxOverrides"
     __slots__ = ()
-    _hx_statics = ["iterator", "eq", "stringOrNull", "map", "modf", "mod", "mapKwArgs"]
+    _hx_statics = ["iterator", "eq", "stringOrNull", "map", "mapKwArgs"]
 
     @staticmethod
     def iterator(x):
@@ -6144,14 +5455,6 @@ class HxOverrides:
         if isinstance(x,list):
             return list(map(f,x))
         return x.map(f)
-
-    @staticmethod
-    def modf(a,b):
-        return float('nan') if (b == 0.0) else a % b if a >= 0 else -(-a % b)
-
-    @staticmethod
-    def mod(a,b):
-        return a % b if a >= 0 else -(-a % b)
 
     @staticmethod
     def mapKwArgs(a,v):
@@ -7001,9 +6304,9 @@ class tink_runloop_QueueWorker:
 
     def __init__(self,owner,id):
         self.id = id
-        self.tasks = haxe_ds_List()
+        self.tasks = tink_concurrent__Queue_Impl()
         self.owner = owner
-        self.thread = "Fake Main Thread"
+        self.thread = python_lib_Threading.current_thread()
 
     def get_id(self):
         return self.id
@@ -7025,7 +6328,7 @@ class tink_runloop_QueueWorker:
         return task
 
     def asap(self,task):
-        if (self.thread == "Fake Main Thread"):
+        if (self.thread == python_lib_Threading.current_thread()):
             task.perform()
         else:
             self.atNextStep(task)
@@ -7064,7 +6367,7 @@ class tink_runloop_QueueWorker:
         return ("Worker:" + HxOverrides.stringOrNull(self.id))
 
     def step(self):
-        if (self.thread == "Fake Main Thread"):
+        if (self.thread == python_lib_Threading.current_thread()):
             return self.doStep()
         else:
             return tink_runloop_WorkResult.WrongThread
@@ -7073,7 +6376,7 @@ class tink_runloop_QueueWorker:
         if (self.tasks is None):
             return tink_runloop_WorkResult.Aborted
         else:
-            return self.execute(self.tasks.pop())
+            return self.execute(self.tasks.pop(True))
 
     @staticmethod
     def _hx_empty_init(_hx_o):
@@ -7307,10 +6610,61 @@ tink_core_SignalTrigger._hx_class = tink_core_SignalTrigger
 _hx_classes["tink.core.SignalTrigger"] = tink_core_SignalTrigger
 
 
+class tink_concurrent__Queue_Impl:
+    _hx_class_name = "tink.concurrent._Queue.Impl"
+    __slots__ = ("read", "write", "data")
+    _hx_fields = ["read", "write", "data"]
+    _hx_methods = ["add", "push", "pop"]
+
+    def __init__(self):
+        self.read = python_lib_threading_RLock()
+        self.write = python_lib_threading_RLock()
+        self.data = haxe_ds_List()
+
+    def add(self,msg):
+        _gthis = self
+        def _hx_local_0():
+            _gthis.data.add(msg)
+        tink_concurrent__Mutex_Mutex_Impl_.synchronized(self.write,_hx_local_0)
+
+    def push(self,msg):
+        _gthis = self
+        def _hx_local_0():
+            _gthis.data.add(msg)
+        tink_concurrent__Mutex_Mutex_Impl_.synchronized(self.write,_hx_local_0)
+
+    def pop(self,block):
+        _gthis = self
+        if block:
+            self.read.acquire()
+            while (self.data.length == 0):
+                Sys.sleep(.001)
+        elif (not self.read.acquire(False)):
+            return None
+        def _hx_local_0():
+            return _gthis.data.pop()
+        ret = tink_concurrent__Mutex_Mutex_Impl_.synchronized(self.write,_hx_local_0)
+        this1 = self.read
+        try:
+            this1.release()
+        except Exception as _hx_e:
+            _hx_e1 = _hx_e.val if isinstance(_hx_e, _HxException) else _hx_e
+            pass
+        return ret
+
+    @staticmethod
+    def _hx_empty_init(_hx_o):
+        _hx_o.read = None
+        _hx_o.write = None
+        _hx_o.data = None
+tink_concurrent__Queue_Impl._hx_class = tink_concurrent__Queue_Impl
+_hx_classes["tink.concurrent._Queue.Impl"] = tink_concurrent__Queue_Impl
+
+
 class tink_RunLoop(tink_runloop_QueueWorker):
     _hx_class_name = "tink.RunLoop"
-    _hx_fields = ["retainCount", "running", "slaves", "done", "_done", "burstCap", "slaveCounter"]
-    _hx_methods = ["burst", "enter", "spin", "log", "onError", "delegate", "tryDelegate", "retain", "bind", "synchronously", "runSlaves", "doStep", "createSlave"]
+    _hx_fields = ["retainCount", "running", "slaves", "done", "_done", "burstCap"]
+    _hx_methods = ["burst", "enter", "spin", "log", "onError", "delegate", "tryDelegate", "retain", "bind", "synchronously", "doStep", "createSlave"]
     _hx_statics = ["current", "getStamp", "create"]
     _hx_interfaces = []
     _hx_super = tink_runloop_QueueWorker
@@ -7320,7 +6674,6 @@ class tink_RunLoop(tink_runloop_QueueWorker):
         if (id is None):
             id = "ROOT_LOOP"
         self.running = None
-        self.slaveCounter = 0
         self.burstCap = .25
         self.retainCount = 0
         self.slaves = []
@@ -7426,42 +6779,43 @@ class tink_RunLoop(tink_runloop_QueueWorker):
         return _hx_local_2
 
     def synchronously(self,operation):
-        return operation()
-
-    def runSlaves(self):
-        _hx_local_0 = self
-        _hx_local_1 = _hx_local_0.slaveCounter
-        _hx_local_0.slaveCounter = HxOverrides.mod(_hx_local_1, len(self.slaves))
-        _hx_local_0.slaveCounter
-        if (len(self.slaves) > 0):
-            _g = 0
-            _g1 = len(self.slaves)
-            while (_g < _g1):
-                _g = (_g + 1)
-                def _hx_local_5():
-                    _hx_local_3 = self
-                    _hx_local_4 = _hx_local_3.slaveCounter
-                    _hx_local_3.slaveCounter = (_hx_local_4 + 1)
-                    return _hx_local_4
-                _g2 = HxOverrides.mod(_hx_local_5(), len(self.slaves))
-                if ((self.slaves[_g2] if _g2 >= 0 and _g2 < len(self.slaves) else None).step().index == 0):
-                    return tink_runloop_WorkResult.Progressed
-        return tink_runloop_WorkResult.Idle
+        if (python_lib_Threading.current_thread() == self.thread):
+            return operation()
+        else:
+            ret = tink_concurrent__Queue_Impl()
+            def _hx_local_0():
+                tmp = tink_core_TypedError.catchExceptions(operation,None,_hx_AnonObject({'fileName': "tink/RunLoop.hx", 'lineNumber': 211, 'className': "tink.RunLoop", 'methodName': "synchronously"}))
+                ret.push(tmp)
+            self.asap(tink_runloop__Task_Task_Impl_.ofFunction(_hx_local_0))
+            _g = ret.pop(True)
+            tmp1 = _g.index
+            if (tmp1 == 0):
+                return _g.params[0]
+            elif (tmp1 == 1):
+                raise _HxException(_g.params[0])
+            else:
+                pass
 
     def doStep(self):
-        _g = self.tasks.pop()
+        _g = self.tasks.pop(False)
         if (_g is None):
             if (self.retainCount == 0):
                 tink_core__Callback_CallbackList_Impl_.invoke(self._done.handlers,tink_core_Noise.Noise)
                 return tink_runloop_WorkResult.Done
             else:
-                return self.runSlaves()
+                return super().doStep()
         else:
             return self.execute(_g)
 
     def createSlave(self):
         w = tink_runloop_QueueWorker(self,((("" + HxOverrides.stringOrNull(self.id)) + "/worker#") + Std.string(len(self.slaves))))
         self.slaves.append(w)
+        def _hx_local_0():
+            w.thread = python_lib_Threading.current_thread()
+            res = None
+            while (res != tink_runloop_WorkResult.Aborted):
+                res = w.step()
+        python_lib_threading_Thread(**python__KwArgs_KwArgs_Impl_.fromT(_hx_AnonObject({'group': None, 'target': _hx_local_0}))).start()
         return w
 
     @staticmethod
@@ -7480,7 +6834,6 @@ class tink_RunLoop(tink_runloop_QueueWorker):
         _hx_o.done = None
         _hx_o._done = None
         _hx_o.burstCap = None
-        _hx_o.slaveCounter = None
 tink_RunLoop._hx_class = tink_RunLoop
 _hx_classes["tink.RunLoop"] = tink_RunLoop
 
@@ -7492,11 +6845,28 @@ class tink_concurrent__Mutex_Mutex_Impl_:
 
     @staticmethod
     def _new():
-        return False
+        return python_lib_threading_RLock()
 
     @staticmethod
     def synchronized(this1,f):
-        return f()
+        this1.acquire()
+        try:
+            ret = f()
+            try:
+                this1.release()
+            except Exception as _hx_e:
+                _hx_e1 = _hx_e.val if isinstance(_hx_e, _HxException) else _hx_e
+                pass
+            return ret
+        except Exception as _hx_e:
+            _hx_e1 = _hx_e.val if isinstance(_hx_e, _HxException) else _hx_e
+            e1 = _hx_e1
+            try:
+                this1.release()
+            except Exception as _hx_e:
+                _hx_e1 = _hx_e.val if isinstance(_hx_e, _HxException) else _hx_e
+                pass
+            raise _HxException(e1)
 tink_concurrent__Mutex_Mutex_Impl_._hx_class = tink_concurrent__Mutex_Mutex_Impl_
 _hx_classes["tink.concurrent._Mutex.Mutex_Impl_"] = tink_concurrent__Mutex_Mutex_Impl_
 
@@ -7504,23 +6874,27 @@ _hx_classes["tink.concurrent._Mutex.Mutex_Impl_"] = tink_concurrent__Mutex_Mutex
 class tink_concurrent__Mutex_Impl_Impl_:
     _hx_class_name = "tink.concurrent._Mutex.Impl_Impl_"
     __slots__ = ()
-    _hx_statics = ["_new", "tryAcquire", "acquire", "release"]
+    _hx_statics = ["_new", "acquire", "tryAcquire", "release"]
 
     @staticmethod
     def _new():
-        return False
-
-    @staticmethod
-    def tryAcquire(this1):
-        return True
+        return python_lib_threading_RLock()
 
     @staticmethod
     def acquire(this1):
-        pass
+        this1.acquire()
+
+    @staticmethod
+    def tryAcquire(this1):
+        return this1.acquire(False)
 
     @staticmethod
     def release(this1):
-        pass
+        try:
+            this1.release()
+        except Exception as _hx_e:
+            _hx_e1 = _hx_e.val if isinstance(_hx_e, _HxException) else _hx_e
+            pass
 tink_concurrent__Mutex_Impl_Impl_._hx_class = tink_concurrent__Mutex_Impl_Impl_
 _hx_classes["tink.concurrent._Mutex.Impl_Impl_"] = tink_concurrent__Mutex_Impl_Impl_
 
@@ -7532,44 +6906,34 @@ class tink_concurrent__Queue_Queue_Impl_:
 
     @staticmethod
     def _new():
-        return haxe_ds_List()
+        return tink_concurrent__Queue_Impl()
 
     @staticmethod
     def pop(this1):
-        return this1.pop()
+        return this1.pop(False)
 
     @staticmethod
     def _hx_await(this1):
-        return this1.pop()
+        return this1.pop(True)
 tink_concurrent__Queue_Queue_Impl_._hx_class = tink_concurrent__Queue_Queue_Impl_
 _hx_classes["tink.concurrent._Queue.Queue_Impl_"] = tink_concurrent__Queue_Queue_Impl_
-
-
-class tink_concurrent__Queue_Impl_Impl_:
-    _hx_class_name = "tink.concurrent._Queue.Impl_Impl_"
-    __slots__ = ()
-    _hx_statics = ["_new", "pop"]
-
-    @staticmethod
-    def _new():
-        return haxe_ds_List()
-
-    @staticmethod
-    def pop(this1,block):
-        return this1.pop()
-tink_concurrent__Queue_Impl_Impl_._hx_class = tink_concurrent__Queue_Impl_Impl_
-_hx_classes["tink.concurrent._Queue.Impl_Impl_"] = tink_concurrent__Queue_Impl_Impl_
 
 
 class tink_concurrent__Thread_Thread_Impl_:
     _hx_class_name = "tink.concurrent._Thread.Thread_Impl_"
     __slots__ = ()
-    _hx_statics = ["get_current", "MAIN"]
+    _hx_statics = ["_new", "get_current", "MAIN"]
     current = None
 
     @staticmethod
+    def _new(f):
+        ret = python_lib_threading_Thread(**python__KwArgs_KwArgs_Impl_.fromT(_hx_AnonObject({'group': None, 'target': f})))
+        ret.start()
+        return ret
+
+    @staticmethod
     def get_current():
-        return "Fake Main Thread"
+        return python_lib_Threading.current_thread()
 tink_concurrent__Thread_Thread_Impl_._hx_class = tink_concurrent__Thread_Thread_Impl_
 _hx_classes["tink.concurrent._Thread.Thread_Impl_"] = tink_concurrent__Thread_Thread_Impl_
 
@@ -7577,15 +6941,17 @@ _hx_classes["tink.concurrent._Thread.Thread_Impl_"] = tink_concurrent__Thread_Th
 class tink_concurrent__Thread_Impl_Impl_:
     _hx_class_name = "tink.concurrent._Thread.Impl_Impl_"
     __slots__ = ()
-    _hx_statics = ["_new", "getCurrent"]
+    _hx_statics = ["create", "getCurrent"]
 
     @staticmethod
-    def _new(s):
-        return s
+    def create(f):
+        ret = python_lib_threading_Thread(**python__KwArgs_KwArgs_Impl_.fromT(_hx_AnonObject({'group': None, 'target': f})))
+        ret.start()
+        return ret
 
     @staticmethod
     def getCurrent():
-        return "Fake Main Thread"
+        return python_lib_Threading.current_thread()
 tink_concurrent__Thread_Impl_Impl_._hx_class = tink_concurrent__Thread_Impl_Impl_
 _hx_classes["tink.concurrent._Thread.Impl_Impl_"] = tink_concurrent__Thread_Impl_Impl_
 
@@ -8554,8 +7920,8 @@ class tink_core_FutureTrigger:
         op = None
         def _hx_local_1():
             def _hx_local_0(cb):
-                nonlocal op
                 nonlocal f
+                nonlocal op
                 if (op is None):
                     op = tink_core_FutureTrigger()
                     f.handle(op.trigger)
@@ -9431,8 +8797,8 @@ class tink_core__Promise_Promise_Impl_:
                 sync = False
                 def _hx_local_2(o):
                     def _hx_local_1(_):
-                        nonlocal p
                         nonlocal sync
+                        nonlocal p
                         sync = True
                         p = None
                     o.b.handle(_hx_local_1)
@@ -9736,7 +9102,7 @@ class tink_runloop_TaskBase:
             recurring = False
         self.recurring = recurring
         self.state = tink_runloop_TaskState.Pending
-        self.m = False
+        self.m = python_lib_threading_RLock()
 
     def get_recurring(self):
         return self.recurring
@@ -9752,13 +9118,27 @@ class tink_runloop_TaskBase:
         self._hx_exec(_hx_local_0)
 
     def _hx_exec(self,f):
+        if (not self.m.acquire(False)):
+            return
         if (self.state == tink_runloop_TaskState.Pending):
             try:
                 f()
             except Exception as _hx_e:
                 _hx_e1 = _hx_e.val if isinstance(_hx_e, _HxException) else _hx_e
                 e = _hx_e1
+                this1 = self.m
+                try:
+                    this1.release()
+                except Exception as _hx_e:
+                    _hx_e1 = _hx_e.val if isinstance(_hx_e, _HxException) else _hx_e
+                    pass
                 raise _HxException(e)
+        this2 = self.m
+        try:
+            this2.release()
+        except Exception as _hx_e:
+            _hx_e1 = _hx_e.val if isinstance(_hx_e, _HxException) else _hx_e
+            pass
 
     def perform(self):
         _gthis = self
@@ -12311,13 +11691,21 @@ class tink_unit_TestSuiteBuilder0(tink_unit_TestSuiteBase):
     def __init__(self,target,name = None):
         def _hx_local_0():
             this1 = tink_unit__AssertionBuffer_Impl()
-            return target.test_create(60000,this1)
-        tmp = tink_unit_TestCase(_hx_AnonObject({'name': "test_create", 'description': "60000", 'pos': _hx_AnonObject({'lineNumber': 28, 'fileName': "src/Main.hx", 'methodName': "test_create", 'className': "TestStorage"})}),_hx_local_0,30000,False,False,_hx_AnonObject({'lineNumber': 28, 'fileName': "src/Main.hx", 'methodName': "test_create", 'className': "TestStorage"}))
+            return target.test_create(20000,this1)
+        tmp = tink_unit_TestCase(_hx_AnonObject({'name': "test_create", 'description': "20000", 'pos': _hx_AnonObject({'lineNumber': 45, 'fileName': "src/Main.hx", 'methodName': "test_create", 'className': "TestStorage"})}),_hx_local_0,1200000,False,False,_hx_AnonObject({'lineNumber': 45, 'fileName': "src/Main.hx", 'methodName': "test_create", 'className': "TestStorage"}))
         def _hx_local_1():
             this2 = tink_unit__AssertionBuffer_Impl()
-            return target.test_http(4000,9,this2)
-        tmp1 = tink_unit_TestCase(_hx_AnonObject({'name': "test_http", 'description': "4000, 9", 'pos': _hx_AnonObject({'lineNumber': 95, 'fileName': "src/Main.hx", 'methodName': "test_http", 'className': "TestStorage"})}),_hx_local_1,30000,False,False,_hx_AnonObject({'lineNumber': 95, 'fileName': "src/Main.hx", 'methodName': "test_http", 'className': "TestStorage"}))
-        super().__init__(_hx_AnonObject({'name': ("TestStorage" if ((name is None)) else name), 'pos': _hx_AnonObject({'lineNumber': 23, 'fileName': "src/Main.hx", 'methodName': None, 'className': "TestStorage"})}),[tmp, tmp1],_hx_AnonObject({'fileName': "tink/unit/TestBuilder.hx", 'lineNumber': 129, 'className': "tink.unit.TestSuiteBuilder0", 'methodName': "new"}))
+            return target.test_create(200000,this2)
+        tmp1 = tink_unit_TestCase(_hx_AnonObject({'name': "test_create", 'description': "200000", 'pos': _hx_AnonObject({'lineNumber': 46, 'fileName': "src/Main.hx", 'methodName': "test_create", 'className': "TestStorage"})}),_hx_local_1,1200000,False,False,_hx_AnonObject({'lineNumber': 46, 'fileName': "src/Main.hx", 'methodName': "test_create", 'className': "TestStorage"}))
+        def _hx_local_2():
+            this3 = tink_unit__AssertionBuffer_Impl()
+            return target.test_create(1000000,this3)
+        tmp2 = tink_unit_TestCase(_hx_AnonObject({'name': "test_create", 'description': "1000000", 'pos': _hx_AnonObject({'lineNumber': 47, 'fileName': "src/Main.hx", 'methodName': "test_create", 'className': "TestStorage"})}),_hx_local_2,1200000,False,False,_hx_AnonObject({'lineNumber': 47, 'fileName': "src/Main.hx", 'methodName': "test_create", 'className': "TestStorage"}))
+        def _hx_local_3():
+            this4 = tink_unit__AssertionBuffer_Impl()
+            return target.test_http(1000,9,this4)
+        tmp3 = tink_unit_TestCase(_hx_AnonObject({'name': "test_http", 'description': "1000, 9", 'pos': _hx_AnonObject({'lineNumber': 124, 'fileName': "src/Main.hx", 'methodName': "test_http", 'className': "TestStorage"})}),_hx_local_3,1200000,False,False,_hx_AnonObject({'lineNumber': 124, 'fileName': "src/Main.hx", 'methodName': "test_http", 'className': "TestStorage"}))
+        super().__init__(_hx_AnonObject({'name': ("TestStorage" if ((name is None)) else name), 'pos': _hx_AnonObject({'lineNumber': 23, 'fileName': "src/Main.hx", 'methodName': None, 'className': "TestStorage"})}),[tmp, tmp1, tmp2, tmp3],_hx_AnonObject({'fileName': "tink/unit/TestBuilder.hx", 'lineNumber': 129, 'className': "tink.unit.TestSuiteBuilder0", 'methodName': "new"}))
         self.target = target
 
     def setup(self):
@@ -12446,15 +11834,9 @@ haxe_Serializer.BASE64_CODES = None
 haxe_Unserializer.DEFAULT_RESOLVER = haxe__Unserializer_DefaultResolver()
 haxe_Unserializer.BASE64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789%:"
 haxe_Unserializer.CODES = None
-haxe_zip_InflateImpl.LEN_EXTRA_BITS_TBL = [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0, -1, -1]
-haxe_zip_InflateImpl.LEN_BASE_VAL_TBL = [3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258]
-haxe_zip_InflateImpl.DIST_EXTRA_BITS_TBL = [0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13, -1, -1]
-haxe_zip_InflateImpl.DIST_BASE_VAL_TBL = [1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577]
-haxe_zip_InflateImpl.CODE_LENGTHS_POS = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15]
-haxe_zip_InflateImpl.FIXED_HUFFMAN = None
 sys_Http.PROXY = None
 tink_RunLoop.current = tink_RunLoop()
-tink_concurrent__Thread_Thread_Impl_.MAIN = "Fake Main Thread"
+tink_concurrent__Thread_Thread_Impl_.MAIN = python_lib_Threading.current_thread()
 tink_core__Callback_Callback_Impl_.depth = 0
 tink_core__Callback_Callback_Impl_.MAX_DEPTH = 200
 tink_core__Future_NeverFuture.inst = tink_core__Future_NeverFuture()

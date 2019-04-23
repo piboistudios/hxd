@@ -18,54 +18,83 @@ class Main {
 	}
 }
 
-@:timeout(30000)
+@:timeout(1200000)
 @:asserts
 class TestStorage {
 	public function new() {}
 
 	// @:exclude
-
-	@:variant(60000)
+	// @:variant(10)
+	// @:variant(20)
+	// @:variant(30)
+	// @:variant(40)
+	// @:varaint(50)
+	// @:variant(60)
+	// @:variant(70)
+	// @:variant(80)
+	// @:variant(90)
+	// @:variant(100)
+	// @:variant(200)
+	// @:variant(500)
+	// @:varaint(1000)
+	// @:variant(2000)
+	// @:variant(5000)
+	// @:variant(50000)
+	// @:variant(100000)
+	// @:variant(10)
+	@:variant(20000)
+	@:variant(200000)
+	@:variant(1000000)
+	
+	
+	// @:variant(10000)
+	// @:Variant(100000)
+	// @:variant(1000000)
 	public function test_create(count:Int) {
 		// sys.io.File.saveContent('./test/test.hxbk', '');
 		Engine.start({path: 'test'});
 		var book = Book.open('test');
-		book.addStoragePlan(
-			haxe.zip.Compress.run.bind(_, 1),
-			haxe.zip.Uncompress.run.bind(_, null)
-			
-		);
-		var eventStream = book.create([for (i in 0...count) new Record("DATA HERE")]);
-		var expecting = 0;
-		var log = [];
-		var hits = 0;
-		var sum = 0;
-		var handler = eventStream.forEach(result -> {
-			// trace('Result: $result');
-			switch (result) {
-				case Expect(amount):
-					expecting = amount;
-				case Created(page, records):
-					hits++;
-					log.push({
-						page: page.number,
-						count: records.length
-					});
-					sum += records.length;
-			}
-			return Resume;
-		});
-		handler.handle(result -> {
-			book.commit().handle(() -> {
-				book.count().handle(total -> {
-					var padding = book.calculatePadding();
+		book.count().handle(initial -> {
+			// book.addStoragePlan(
+			// 	haxe.zip.Compress.run.bind(_, 1),
+			// 	haxe.zip.Uncompress.run.bind(_, null)
 
-					asserts.assert(padding.percentage < 0.3);
-					asserts.assert(result == Depleted);
-					asserts.assert(total == count);
-					asserts.assert(sum == total);
-					// trace('LOG: $log');
-					asserts.done();
+			// );
+			var eventStream = book.create([for (i in 0...count) new Record("DATA HERE")]);
+			var expecting = 0;
+			var log = [];
+			var hits = 0;
+			var sum = 0;
+			var handler = eventStream.forEach(result -> {
+				// trace('Result: $result');
+				switch (result) {
+					case Expect(amount):
+						expecting = amount;
+					case Created(page, records):
+						hits++;
+						log.push({
+							page: page.number,
+							count: records.length
+						});
+						sum += records.length;
+				}
+				return Resume;
+			});
+			handler.handle(result -> {
+				
+				book.commit().handle(() -> {
+					trace(log);
+					trace("DONE COMMITTING.");
+					book.count().handle(total -> {
+						var padding = book.calculatePadding();
+						trace('total: $total, sum: $sum, initial: $initial, hits: $hits');
+						asserts.assert(padding.percentage < 0.3);
+						asserts.assert(result == Depleted);
+						asserts.assert(count + initial == total);
+						asserts.assert(total - sum == initial);
+						// trace('LOG: $log');
+						asserts.done();
+					});
 				});
 			});
 		});
@@ -92,7 +121,7 @@ class TestStorage {
 	// @:variant(2000, 7)
 	// @:variant(3000, 8)
 
-	@:variant(4000, 9)
+	@:variant(1000, 9)
 	public function test_http(count:Int, apiHits:Int) {
 		Promise.inParallel([for (i in 0...apiHits) request(count)]).handle(results -> {
 			// sys.io.File.saveContent('./http/randomuser.me.hxbk', '');

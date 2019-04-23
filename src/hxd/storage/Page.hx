@@ -7,6 +7,7 @@ import haxe.io.Bytes;
 using hxd.storage.Serializer;
 class Page {
 	var book:Book;
+	
 	public var number(default, null):Ref<Int>;
 	public var dirty(default, null):Bool = false;
 	public var records(default, null):haxe.ds.BalancedTree<Int, Record>;
@@ -22,7 +23,7 @@ class Page {
 	public var bytes(get, never):Bytes;
 
 	public function get_bytes() {
-		if (_bytes == null)
+		// if (_bytes == null)
 			_bytes = this.serialize(book.postSerialization);
 		return _bytes;
 	}
@@ -32,7 +33,7 @@ class Page {
 	public var size(get, never):Int;
 
 	public function get_size() {
-		if (_size == null)
+		// if (_size == null)
 			_size = bytes.length;
 		return _size;
 	}
@@ -40,28 +41,32 @@ class Page {
 	public function touch() {
 		dirty = true;
 		_size = null;
+		_bytes = null;
 	}
 
 	function cleanse() {
 		dirty = false;
+		_size = null;
+		_bytes = null;
 	}
 
 	function attempt(operation:Void->Void) {
 		var tmpRecords = records.array();
 		var wasDirty = dirty;
 		try {
-			operation();
 			touch();
+			operation();
 		} catch (e:Dynamic) {
 			throw e;
 		}
-		if (size >= book.pageSize) {
+		if (size + 128 >= book.pageSize) {
 			records = new BalancedTree<Int, Record>();
 			tmpRecords.iter(record -> records.set(record.index, record));
 			if (!wasDirty)
 				cleanse();
 			return false;
 		}
+
 		return true;
 	}
 

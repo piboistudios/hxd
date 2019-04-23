@@ -1,6 +1,7 @@
 -lib tink_runloop
 -lib tink_unittest
 -lib tink_streams
+-D concurrent
 -cp src
 -D analyzer-optimize
 -main Main
@@ -8,5 +9,5 @@
 -python test.py
 --next
 -neko test.n
---next
---interp
+# --next
+# --interp
